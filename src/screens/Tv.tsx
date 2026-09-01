@@ -2,7 +2,7 @@ import { ReactNode, useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { Maximize, Minimize, Timer, Coins, Users, Skull, Crown, Coffee } from "lucide-react";
 import {
-  useDb, Root, fmtClock, fmtNum, levelInfo, nextLevelOf, chipsInPlay, computeSeasonRating,
+  useDb, Root, fmtClock, fmtNum, levelInfo, nextLevelOf, bankChips, computeSeasonRating,
   fmtDate, plural,
 } from "../lib/db";
 import { Avatar, Confetti, Marquee, Suit, cn } from "../lib/ui";
@@ -149,9 +149,9 @@ export function TvMain() {
           <div className="flex h-full flex-col gap-3.5">
             <div className="grid flex-1 grid-cols-2 grid-rows-2 gap-3.5">
               {([
-                { icon: <Coins className="size-5.5" />, l: "Фишек в игре", v: fmtNum(chipsInPlay(t)), suit: "spade" as const },
+                { icon: <Coins className="size-5.5" />, l: "Фишек в игре", v: fmtNum(bankChips(t)), suit: "spade" as const },
                 { icon: <Users className="size-5.5" />, l: "В игре", v: `${left} / ${Object.keys(t.registeredPlayers).length}`, suit: "heart" as const },
-                { icon: <Timer className="size-5.5" />, l: "Средний стек", v: fmtNum(left ? Math.round(chipsInPlay(t) / left) : 0), suit: "diamond" as const },
+                { icon: <Timer className="size-5.5" />, l: "Средний стек", v: fmtNum(left ? Math.round(bankChips(t) / left) : 0), suit: "diamond" as const },
                 { icon: <Skull className="size-5.5" />, l: "Нокаутов", v: String(t.pult.knockouts), suit: "club" as const },
               ]).map((x, i) => (
                 <div key={x.l}
@@ -201,7 +201,7 @@ export function TvFinal() {
             <div className="absolute inset-0 grid place-items-center">
               <div className="text-center">
                 <Suit s="spade" className="mx-auto size-10 text-white/25" />
-                <p className="num mt-2 text-[clamp(15px,1.6vw,24px)] font-extrabold text-white/80">{fmtNum(chipsInPlay(t))} фишек</p>
+                <p className="num mt-2 text-[clamp(15px,1.6vw,24px)] font-extrabold text-white/80">{fmtNum(bankChips(t))} фишек</p>
                 <p className="text-[11px] font-extrabold uppercase tracking-[0.24em] text-white/40">в банке турнира</p>
               </div>
             </div>

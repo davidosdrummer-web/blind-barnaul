@@ -442,7 +442,19 @@ function persist(s: Root) {
 class Store {
   state: Root;
   private subs = new Set<() => void>();
-  constructor() { this.state = load() ?? seed(); }
+  constructor() {
+    this.state = load() ?? seed();
+    // синхронизация между вкладками: пульт в одной вкладке — ТВ-экран в другой
+    if (typeof window !== "undefined") {
+      window.addEventListener("storage", (e) => {
+        if (e.key !== KEY || !e.newValue) return;
+        try {
+          const parsed = JSON.parse(e.newValue) as Root;
+          if (parsed && parsed.users && parsed.tournaments) { this.state = parsed; this.subs.forEach((f) => f()); }
+        } catch { /* повреждённые данные игнорируем */ }
+      });
+    }
+  }
   get = (): Root => this.state;
   subscribe = (fn: () => void) => { this.subs.add(fn); return () => { this.subs.delete(fn); }; };
   mutate(fn: (s: Root) => void) {
