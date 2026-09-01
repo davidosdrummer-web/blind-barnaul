@@ -20,6 +20,7 @@ export interface Notification {
 export interface User {
   uid: string; email: string; phone: string; role: Role;
   nickname: string; firstName: string; lastName: string; hue: number;
+  avatar?: string;
   registrationDate: number; isBlocked: boolean; isArchived: boolean;
   stats: UserStats;
   achievements: Record<string, { earnedAt: number; achievementName: string }>;
@@ -38,7 +39,9 @@ export interface Tournament {
   id: string; status: TStatus; name: string; seasonId: string;
   startDate: number; startTime: string; registrationDuration: number;
   startingStack: number; finalTablePlayers: number; description: string;
-  pointsForKnockout: boolean; createdAt: number;
+  pointsForKnockout: boolean; knockoutPoints: number;
+  rebuyChips: number; reentryChips: number; addonChips: number;
+  isFinal?: boolean; withdrawn?: number; createdAt: number;
   structure: { levels: Level[]; breaks: Break[] };
   bonuses: Bonus[];
   pointsTable: Record<string, number>;
@@ -54,6 +57,7 @@ export interface Tournament {
 }
 export interface TemplateData {
   startingStack: number; finalTablePlayers: number; pointsForKnockout: boolean;
+  knockoutPoints: number; rebuyChips: number; reentryChips: number; addonChips: number;
   registrationDuration: number; description: string;
   structure: { levels: Level[]; breaks: Break[] };
   bonuses: Bonus[]; pointsTable: Record<string, number>;
@@ -287,7 +291,7 @@ function seed(): Root {
     id: "t-active", status: "active", name: "Кубок Пиковой Дамы", seasonId: "s1",
     startDate: now - 2 * 3600e3, startTime: "19:00", registrationDuration: 40,
     startingStack: 15000, finalTablePlayers: 9, description: "Флагманский турнир клуба. Поздняя регистрация 40 минут, баунти за выбивание.",
-    pointsForKnockout: true, createdAt: now - 9 * DAY,
+    pointsForKnockout: true, knockoutPoints: 5, rebuyChips: 15000, reentryChips: 15000, addonChips: 7500, createdAt: now - 9 * DAY,
     structure: { levels: seedLevels(), breaks: [{ afterLevel: 4, duration: 10 }, { afterLevel: 6, duration: 10 }] },
     bonuses: [
       { id: "b1", name: "Ранний бонус", chips: 3000 },
@@ -327,7 +331,7 @@ function seed(): Root {
     id: "t-plan1", status: "planned", name: "Субботний MTT", seasonId: "s1",
     startDate: now + 2 * DAY, startTime: "18:00", registrationDuration: 30,
     startingStack: 12000, finalTablePlayers: 9, description: "Еженедельный субботний турнир для всех уровней подготовки.",
-    pointsForKnockout: false, createdAt: now - 4 * DAY,
+    pointsForKnockout: false, knockoutPoints: 0, rebuyChips: 12000, reentryChips: 12000, addonChips: 6000, createdAt: now - 4 * DAY,
     structure: { levels: seedLevels().slice(0, 7), breaks: [{ afterLevel: 4, duration: 10 }] },
     bonuses: [{ id: "b4", name: "Бонус ранней регистрации", chips: 2000 }],
     pointsTable: { ...stdPoints },
@@ -341,7 +345,7 @@ function seed(): Root {
     id: "t-plan2", status: "planned", name: "Хайроллер: Осенний финал", seasonId: "s1",
     startDate: now + 6 * DAY, startTime: "19:30", registrationDuration: 45,
     startingStack: 30000, finalTablePlayers: 8, description: "Турнир с высоким вступительным взносом и глубокими стеками.",
-    pointsForKnockout: true, createdAt: now - 2 * DAY,
+    pointsForKnockout: true, knockoutPoints: 8, rebuyChips: 30000, reentryChips: 30000, addonChips: 15000, createdAt: now - 2 * DAY,
     structure: { levels: seedLevels().map((l) => ({ ...l, duration: 20 })), breaks: [{ afterLevel: 3, duration: 15 }, { afterLevel: 6, duration: 15 }] },
     bonuses: [{ id: "b5", name: "Хайроллер-бонус", chips: 10000 }],
     pointsTable: { "1": 220, "2": 160, "3": 120, "4": 90, "5": 70, "6": 55, "7": 45, "8": 35, participation: 15 },
@@ -359,7 +363,8 @@ function seed(): Root {
     return {
       id, status: "completed", name, seasonId, startDate: completedAt - 5 * 3600e3, startTime: "19:00",
       registrationDuration: 30, startingStack: 15000, finalTablePlayers: 9,
-      description: "Турнир завершён.", pointsForKnockout: ko, createdAt: completedAt - 12 * DAY,
+      description: "Турнир завершён.", pointsForKnockout: ko, knockoutPoints: ko ? 5 : 0,
+      rebuyChips: 15000, reentryChips: 15000, addonChips: 7500, createdAt: completedAt - 12 * DAY,
       structure: { levels: seedLevels(), breaks: [{ afterLevel: 4, duration: 10 }] },
       bonuses: [{ id: uid(), name: "Ранний бонус", chips: 3000 }],
       pointsTable: { ...stdPoints },
@@ -385,7 +390,9 @@ function seed(): Root {
   };
 
   const tplData = (stack: number, durs: number, desc: string): TemplateData => ({
-    startingStack: stack, finalTablePlayers: 9, pointsForKnockout: true, registrationDuration: 30, description: desc,
+    startingStack: stack, finalTablePlayers: 9, pointsForKnockout: true, knockoutPoints: 5,
+    rebuyChips: stack, reentryChips: stack, addonChips: Math.round(stack / 2),
+    registrationDuration: 30, description: desc,
     structure: { levels: seedLevels().map((l) => ({ ...l, duration: durs })), breaks: [{ afterLevel: 4, duration: 10 }] },
     bonuses: [{ id: uid(), name: "Ранний бонус", chips: 3000 }],
     pointsTable: { ...stdPoints },
@@ -416,7 +423,7 @@ function seed(): Root {
 }
 
 /* ============================== STORE ============================== */
-const KEY = "pd-club-db-v1";
+const KEY = "pd-club-db-v2";
 function load(): Root | null {
   try {
     const raw = localStorage.getItem(KEY);
@@ -538,12 +545,31 @@ export function login(loginUid: string): string | null {
 }
 export function logout() { db.mutate((s) => { s.session.uid = null; }); }
 export function setView(view: "club" | "player") { db.mutate((s) => { s.session.view = view; }); playSound("click"); }
+export function registerUser(d: { nickname: string; firstName: string; lastName: string; email: string; phone: string }): string | null {
+  const s0 = db.get();
+  const n = d.nickname.trim();
+  if (!n) return "Укажите никнейм";
+  if (Object.values(s0.users).some((u) => u.nickname.toLowerCase() === n.toLowerCase())) return "Никнейм уже занят";
+  if (d.email.trim() && Object.values(s0.users).some((u) => u.email.toLowerCase() === d.email.trim().toLowerCase())) return "Этот e-mail уже зарегистрирован";
+  const id = uid();
+  db.mutate((s) => {
+    s.users[id] = mkUser({
+      uid: id, nickname: n, firstName: d.firstName.trim(), lastName: d.lastName.trim(),
+      email: d.email.trim(), phone: d.phone.trim(), role: "player",
+      hue: Math.floor(Math.random() * 360), registrationDate: Date.now(),
+    });
+    s.session.uid = id; s.session.view = "player";
+    notifyUser(s, id, "Добро пожаловать в клуб!", `Регистрация завершена — вам присвоена роль «Игрок». Запишитесь на ближайший турнир в разделе «Турниры».`, "account");
+  });
+  playSound("register");
+  return null;
+}
 export function updateClub(patch: Partial<Club>) {
   db.mutate((s) => { Object.assign(s.club, patch); });
   applyTheme({ ...db.get().club });
 }
 export function resetDemo() { db.reset(); applyTheme(db.get().club); }
-export function updateProfile(targetUid: string, patch: Partial<Pick<User, "nickname" | "firstName" | "lastName" | "phone" | "email" | "hue">>) {
+export function updateProfile(targetUid: string, patch: Partial<Pick<User, "nickname" | "firstName" | "lastName" | "phone" | "email" | "hue" | "avatar">>) {
   db.mutate((s) => { Object.assign(s.users[targetUid], patch); });
 }
 export function markAllRead(targetUid: string) {
@@ -596,6 +622,7 @@ export interface TournamentDraft {
   name: string; seasonId: string; startDate: number; startTime: string;
   registrationDuration: number; startingStack: number; finalTablePlayers: number;
   description: string; pointsForKnockout: boolean;
+  knockoutPoints: number; rebuyChips: number; reentryChips: number; addonChips: number;
   structure: { levels: Level[]; breaks: Break[] };
   bonuses: Bonus[]; pointsTable: Record<string, number>;
   tables: { totalTables: number; seatsPerTable: number };
@@ -612,7 +639,9 @@ export function saveTournament(id: string | null, d: TournamentDraft): string | 
       id: tid, status: "planned", name: d.name.trim(), seasonId: d.seasonId,
       startDate: d.startDate, startTime: d.startTime, registrationDuration: d.registrationDuration,
       startingStack: d.startingStack, finalTablePlayers: d.finalTablePlayers, description: d.description,
-      pointsForKnockout: d.pointsForKnockout, createdAt: prev?.createdAt ?? Date.now(),
+      pointsForKnockout: d.pointsForKnockout, knockoutPoints: d.knockoutPoints,
+      rebuyChips: d.rebuyChips, reentryChips: d.reentryChips, addonChips: d.addonChips,
+      isFinal: prev?.isFinal, withdrawn: prev?.withdrawn, createdAt: prev?.createdAt ?? Date.now(),
       structure: d.structure, bonuses: d.bonuses, pointsTable: d.pointsTable,
       tables: { totalTables: d.tables.totalTables, seatsPerTable: d.tables.seatsPerTable, seats: prev?.tables.seats ?? {} },
       registeredPlayers: prev?.registeredPlayers ?? {},
@@ -654,6 +683,7 @@ function addReg(s: Root, tid: string, targetUid: string) {
 export function registerSelf(tid: string, targetUid: string): string | null {
   const t = db.get().tournaments[tid];
   if (!t) return "Турнир не найден";
+  if (t.isFinal && !t.registeredPlayers[targetUid]) return "Турнир по приглашениям: регистрация закрыта";
   if (Object.keys(t.registeredPlayers).length >= capacity(t)) return "Все места заняты";
   if (!lateRegOpen(t)) return "Регистрация завершена";
   db.mutate((s) => {
@@ -793,24 +823,43 @@ export function eliminate(tid: string, targetUid: string, byUid: string | null):
   playSound("knockout");
   return null;
 }
-export function returnPlayer(tid: string, targetUid: string, method: ReturnMethod): string | null {
+export function returnChipsFor(t: Tournament, method: ReturnMethod): number {
+  if (method === "rebuy") return t.rebuyChips > 0 ? t.rebuyChips : t.startingStack;
+  if (method === "reentry") return t.reentryChips > 0 ? t.reentryChips : t.startingStack;
+  if (method === "addon") return t.addonChips > 0 ? t.addonChips : Math.round(t.startingStack / 2);
+  return 0; // last_chance — сумма задаётся вручную на пульте
+}
+export function returnPlayer(tid: string, targetUid: string, method: ReturnMethod, customChips?: number): string | null {
   const t = db.get().tournaments[tid];
   if (!lateRegOpen(t)) return "Поздняя регистрация завершена — возврат невозможен";
+  if (method === "last_chance" && (!customChips || customChips <= 0)) return "Укажите количество фишек для Ласт Шанс";
   db.mutate((s) => {
     const tt = s.tournaments[tid];
     const reg = tt.registeredPlayers[targetUid];
-    const stack = tt.startingStack;
-    const chips = method === "rebuy" || method === "reentry" ? stack : method === "addon" ? Math.round(stack / 2) : Math.round(stack / 4);
+    const chips = method === "last_chance" ? (customChips ?? 0) : returnChipsFor(tt, method);
     reg.isEliminated = false; reg.chips = chips;
     if (method === "rebuy") reg.rebuy++;
     else if (method === "addon") reg.addon++;
     else reg.reentry++;
     const e = tt.pult.eliminated[targetUid]; if (e) e.returnMethod = method;
     tt.pult.returns++;
-    const names: Record<ReturnMethod, string> = { rebuy: "Рибай", reentry: "Ре-энтри", addon: "Адд-он", last_chance: "Ласт Шанс" };
-    notifyUser(s, targetUid, "Возврат в игру", `${names[method]}: вам начислено ${fmtNum(chips)} фишек.`, "tournament");
+    const names: Record<ReturnMethod, string> = { rebuy: "Ребай", reentry: "Ре-энтри", addon: "Адд-он", last_chance: "Ласт Шанс" };
+    notifyUser(s, targetUid, "Возврат в игру", `${names[method]}: введено в игру ${fmtNum(chips)} фишек.`, "tournament");
   });
   playSound("rebuy");
+  return null;
+}
+export function bankChips(t: Tournament) { return Math.max(0, chipsInPlay(t) - (t.withdrawn ?? 0)); }
+export function withdrawChips(tid: string, amount: number): string | null {
+  const t = db.get().tournaments[tid];
+  if (!amount || amount <= 0) return "Введите сумму больше нуля";
+  if (amount > bankChips(t)) return "Сумма превышает фишки в игре";
+  db.mutate((s) => {
+    const tt = s.tournaments[tid];
+    tt.withdrawn = (tt.withdrawn ?? 0) + amount;
+    broadcast(s, "Вывод фишек", `«${tt.name}»: из банка выведено ${fmtNum(amount)} фишек.`);
+  });
+  playSound("click");
   return null;
 }
 export function giveBonus(tid: string, bonusId: string, targetUid: string): string | null {
@@ -834,7 +883,7 @@ export function finishTournament(tid: string) {
     const elim = Object.entries(t.pult.eliminated).sort((a, b) => b[1].eliminatedAt - a[1].eliminatedAt);
     const ranking = [...active.map(([u]) => u), ...elim.map(([u]) => u)];
     const part = t.pointsTable["participation"] ?? 0;
-    const koPts = t.pointsForKnockout ? KO_POINTS : 0;
+    const koPts = t.pointsForKnockout ? (t.knockoutPoints > 0 ? t.knockoutPoints : KO_POINTS) : 0;
     const pointsAwarded: Record<string, number> = {};
     ranking.forEach((targetUid, i) => {
       const place = i + 1;
@@ -910,7 +959,9 @@ export function formFinal(seasonId: string, templateId: string): string | null {
       id: tid, status: "planned", name: `Финал сезона — ${season.name}`, seasonId,
       startDate: Date.now() + 7 * DAY, startTime: "18:00", registrationDuration: d.registrationDuration,
       startingStack: d.startingStack, finalTablePlayers: d.finalTablePlayers, description: d.description,
-      pointsForKnockout: d.pointsForKnockout, createdAt: Date.now(),
+      pointsForKnockout: d.pointsForKnockout, knockoutPoints: d.knockoutPoints ?? 5,
+      rebuyChips: d.rebuyChips ?? d.startingStack, reentryChips: d.reentryChips ?? d.startingStack, addonChips: d.addonChips ?? Math.round(d.startingStack / 2),
+      isFinal: true, createdAt: Date.now(),
       structure: structuredClone(d.structure), bonuses: structuredClone(d.bonuses), pointsTable: { ...d.pointsTable },
       tables: { totalTables: d.tables.totalTables, seatsPerTable: d.tables.seatsPerTable, seats },
       registeredPlayers: rp,

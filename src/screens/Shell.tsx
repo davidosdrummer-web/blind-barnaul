@@ -56,7 +56,10 @@ function useSectionRenderer() {
       if (p1 && p2 === "edit") return <TournamentForm editId={p1} />;
       if (p1 && p2 === "seats") return <TournamentSeats tid={p1} ro={!isOp} />;
       return <TournamentsList />;
-    case "templates": return <Templates ro={!isAdmin} />;
+    case "templates":
+      if (p1 === "new") return <TournamentForm editId={null} templateId="new" />;
+      if (p1 && p2 === "edit") return <TournamentForm editId={null} templateId={p1} />;
+      return <Templates ro={!isAdmin} />;
     case "members": return <Members ro={!isAdmin} />;
     case "rating": return <AdminRating />;
     case "seasons": return p1 ? <SeasonPage sid={p1} ro={!isAdmin} /> : <Seasons ro={!isAdmin} />;

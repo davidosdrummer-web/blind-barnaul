@@ -227,14 +227,19 @@ export function AdminRating() {
 /* ================================ ШАБЛОНЫ ================================ */
 export function Templates({ ro }: { ro: boolean }) {
   const s = useDb();
-  const [editT, setEditT] = useState<{ id: string; name: string; stack: number; ftp: number; reg: number; desc: string } | null>(null);
+  const nav = useNavigate();
   const [delT, setDelT] = useState<string | null>(null);
   const tpls = Object.values(s.templates);
 
   return (
     <div>
       <SectionTitle kicker="Библиотека структур" title="Шаблоны турниров"
-        right={<Badge tone="mut">{tpls.length} {plural(tpls.length, "шаблон", "шаблона", "шаблонов")}</Badge>} />
+        right={
+          <div className="flex items-center gap-2">
+            <Badge tone="mut">{tpls.length} {plural(tpls.length, "шаблон", "шаблона", "шаблонов")}</Badge>
+            {!ro && <Btn size="sm" variant="soft" onClick={() => nav("/app/templates/new")}><Plus className="size-4" /> Создать шаблон</Btn>}
+          </div>
+        } />
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {tpls.map((t, i) => (
           <Reveal key={t.id} delay={i * 60} className="h-full">
@@ -252,7 +257,7 @@ export function Templates({ ro }: { ro: boolean }) {
               </div>
               {!ro && (
                 <div className="mt-auto flex gap-2 pt-4">
-                  <Btn size="sm" variant="soft" className="flex-1" onClick={() => setEditT({ id: t.id, name: t.name, stack: t.data.startingStack, ftp: t.data.finalTablePlayers, reg: t.data.registrationDuration, desc: t.data.description })}><Pencil className="size-4" /> Изменить</Btn>
+                  <Btn size="sm" variant="soft" className="flex-1" onClick={() => nav(`/app/templates/edit/${t.id}`)} title="Откроется полная форма создания турнира — с кнопкой «Сохранить шаблон»"><Pencil className="size-4" /> Редактировать</Btn>
                   <Btn size="sm" variant="danger" onClick={() => setDelT(t.id)}><Trash2 className="size-4" /></Btn>
                 </div>
               )}
@@ -262,27 +267,6 @@ export function Templates({ ro }: { ro: boolean }) {
       </div>
       {tpls.length === 0 && <div className="panel mt-4"><Empty icon={<FileStack className="size-7" />} title="Шаблонов нет" text="Сохраните структуру при создании турнира — она появится здесь." /></div>}
 
-      <Modal open={!!editT} onClose={() => setEditT(null)} title="Редактировать шаблон">
-        {editT && (
-          <div className="space-y-4">
-            <Field label="Название"><input className="inp" value={editT.name} onChange={(e) => setEditT({ ...editT, name: e.target.value })} /></Field>
-            <div className="grid grid-cols-3 gap-3">
-              <Field label="Стек"><input type="number" className="inp" value={editT.stack} onChange={(e) => setEditT({ ...editT, stack: +e.target.value || 0 })} /></Field>
-              <Field label="Финал, игр."><input type="number" className="inp" value={editT.ftp} onChange={(e) => setEditT({ ...editT, ftp: +e.target.value || 0 })} /></Field>
-              <Field label="Рег., мин"><input type="number" className="inp" value={editT.reg} onChange={(e) => setEditT({ ...editT, reg: +e.target.value || 0 })} /></Field>
-            </div>
-            <Field label="Описание"><textarea className="inp min-h-[72px]" value={editT.desc} onChange={(e) => setEditT({ ...editT, desc: e.target.value })} /></Field>
-            <div className="flex justify-end gap-2">
-              <Btn variant="ghost" onClick={() => setEditT(null)}>Отмена</Btn>
-              <Btn onClick={() => {
-                const tpl = s.templates[editT.id];
-                saveTemplate(editT.id, editT.name, { ...tpl.data, startingStack: editT.stack, finalTablePlayers: editT.ftp, registrationDuration: editT.reg, description: editT.desc });
-                setEditT(null); toast("Шаблон обновлён");
-              }}><Save className="size-4" /> Сохранить</Btn>
-            </div>
-          </div>
-        )}
-      </Modal>
       <Modal open={!!delT} onClose={() => setDelT(null)} title="Удалить шаблон?">
         <p className="text-[13.5px] font-semibold text-mut">Шаблон будет удалён из библиотеки. Созданные по нему турниры останутся.</p>
         <div className="mt-5 flex justify-end gap-2">

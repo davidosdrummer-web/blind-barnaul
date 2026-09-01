@@ -133,6 +133,7 @@ function defaultDraft(s: Root): TournamentDraft {
   return {
     name: "", seasonId, startDate: Date.now() + 2 * DAY, startTime: "19:00", registrationDuration: 30,
     startingStack: 15000, finalTablePlayers: 9, description: "", pointsForKnockout: true,
+    knockoutPoints: 5, rebuyChips: 15000, reentryChips: 15000, addonChips: 7500,
     structure: {
       levels: [
         { level: 1, sb: 25, bb: 50, ante: 0, duration: 12 },
@@ -148,17 +149,34 @@ function defaultDraft(s: Root): TournamentDraft {
   };
 }
 
-export function TournamentForm({ editId }: { editId: string | null }) {
+export function TournamentForm({ editId, templateId }: { editId: string | null; templateId?: string | null }) {
   const s = useDb();
   const nav = useNavigate();
   const editing = editId ? s.tournaments[editId] : null;
+  const tplMode = templateId != null;
+  const srcTpl = tplMode && templateId !== "new" ? s.templates[templateId] : null;
   const [d, setD] = useState<TournamentDraft>(() => {
+    const seasonId = Object.values(s.seasons).find((x) => x.isActive)?.id ?? Object.keys(s.seasons)[0] ?? "";
+    if (srcTpl) {
+      const td = srcTpl.data;
+      return {
+        name: srcTpl.name, seasonId, startDate: Date.now() + 2 * DAY, startTime: "19:00",
+        registrationDuration: td.registrationDuration, startingStack: td.startingStack,
+        finalTablePlayers: td.finalTablePlayers, description: td.description,
+        pointsForKnockout: td.pointsForKnockout, knockoutPoints: td.knockoutPoints ?? 5,
+        rebuyChips: td.rebuyChips ?? td.startingStack, reentryChips: td.reentryChips ?? td.startingStack, addonChips: td.addonChips ?? Math.round(td.startingStack / 2),
+        structure: structuredClone(td.structure), bonuses: structuredClone(td.bonuses),
+        pointsTable: { ...td.pointsTable }, tables: { ...td.tables },
+      };
+    }
     if (!editing) return defaultDraft(s);
     return {
       name: editing.name, seasonId: editing.seasonId, startDate: editing.startDate, startTime: editing.startTime,
       registrationDuration: editing.registrationDuration, startingStack: editing.startingStack,
       finalTablePlayers: editing.finalTablePlayers, description: editing.description,
-      pointsForKnockout: editing.pointsForKnockout, structure: structuredClone(editing.structure),
+      pointsForKnockout: editing.pointsForKnockout, knockoutPoints: editing.knockoutPoints ?? 5,
+      rebuyChips: editing.rebuyChips ?? editing.startingStack, reentryChips: editing.reentryChips ?? editing.startingStack, addonChips: editing.addonChips ?? Math.round(editing.startingStack / 2),
+      structure: structuredClone(editing.structure),
       bonuses: structuredClone(editing.bonuses), pointsTable: { ...editing.pointsTable },
       tables: { totalTables: editing.tables.totalTables, seatsPerTable: editing.tables.seatsPerTable },
     };
@@ -183,10 +201,19 @@ export function TournamentForm({ editId }: { editId: string | null }) {
   const updLevel = (i: number, patch: Partial<TournamentDraft["structure"]["levels"][0]>) =>
     setStruct((st) => Object.assign(st.levels[i], patch));
 
+  const toTemplateData = (x: TournamentDraft): TemplateData => ({
+    startingStack: x.startingStack, finalTablePlayers: x.finalTablePlayers, pointsForKnockout: x.pointsForKnockout,
+    knockoutPoints: x.knockoutPoints, rebuyChips: x.rebuyChips, reentryChips: x.reentryChips, addonChips: x.addonChips,
+    registrationDuration: x.registrationDuration, description: x.description,
+    structure: x.structure, bonuses: x.bonuses, pointsTable: x.pointsTable, tables: x.tables,
+  });
   const applyTemplate = (data: TemplateData) => {
     setD((p) => ({
       ...p, startingStack: data.startingStack, finalTablePlayers: data.finalTablePlayers,
       pointsForKnockout: data.pointsForKnockout, registrationDuration: data.registrationDuration,
+      knockoutPoints: data.knockoutPoints ?? 5,
+      rebuyChips: data.rebuyChips ?? data.startingStack, reentryChips: data.reentryChips ?? data.startingStack,
+      addonChips: data.addonChips ?? Math.round(data.startingStack / 2),
       description: data.description || p.description,
       structure: structuredClone(data.structure), bonuses: structuredClone(data.bonuses),
       pointsTable: { ...data.pointsTable }, tables: { ...data.tables },
@@ -195,11 +222,14 @@ export function TournamentForm({ editId }: { editId: string | null }) {
     toast("Шаблон применён — данные можно отредактировать");
   };
   const doSaveTpl = () => {
-    const err = saveTemplate(null, tplName || d.name + " (шаблон)", {
-      startingStack: d.startingStack, finalTablePlayers: d.finalTablePlayers, pointsForKnockout: d.pointsForKnockout,
-      registrationDuration: d.registrationDuration, description: d.description,
-      structure: d.structure, bonuses: d.bonuses, pointsTable: d.pointsTable, tables: d.tables,
-    });
+    if (tplMode) {
+      const err = saveTemplate(templateId === "new" ? null : templateId, d.name.trim(), toTemplateData(d));
+      if (err) { toast(err, "err"); return; }
+      toast("Шаблон сохранён в библиотеку");
+      nav("/app/templates");
+      return;
+    }
+    const err = saveTemplate(null, tplName || d.name + " (шаблон)", toTemplateData(d));
     if (err) { toast(err, "err"); return; }
     setSaveTpl(false); setTplName(""); toast("Шаблон сохранён в библиотеку");
   };
@@ -214,15 +244,21 @@ export function TournamentForm({ editId }: { editId: string | null }) {
 
   return (
     <div>
-      <button onClick={() => nav("/app/tournaments")} className="mb-4 inline-flex items-center gap-2 text-[13px] font-extrabold text-mut transition hover:text-(--acc)">
-        <ArrowLeft className="size-4" /> К списку турниров
+      <button onClick={() => nav(tplMode ? "/app/templates" : "/app/tournaments")} className="mb-4 inline-flex items-center gap-2 text-[13px] font-extrabold text-mut transition hover:text-(--acc)">
+        <ArrowLeft className="size-4" /> {tplMode ? "К шаблонам" : "К списку турниров"}
       </button>
-      <SectionTitle kicker={editing ? "Редактирование" : "Новый турнир"} title={editing ? `«${editing.name}»` : "Создание турнира"}
+      <SectionTitle
+        kicker={tplMode ? (srcTpl ? "Раздел «Шаблоны» · редактирование" : "Раздел «Шаблоны» · новый") : editing ? "Редактирование" : "Новый турнир"}
+        title={tplMode ? (srcTpl ? `Шаблон «${srcTpl.name}»` : "Создание шаблона") : editing ? `«${editing.name}»` : "Создание турнира"}
         right={
-          <div className="flex flex-wrap gap-2">
-            <Btn variant="soft" size="sm" onClick={() => setTplOpen(true)}><FileStack className="size-4" /> Выбрать шаблон</Btn>
-            <Btn variant="ghost" size="sm" onClick={() => setSaveTpl(true)}><Save className="size-4" /> Сохранить шаблон</Btn>
-          </div>
+          tplMode ? (
+            <Badge tone="acc">поля идентичны созданию турнира</Badge>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              <Btn variant="soft" size="sm" onClick={() => setTplOpen(true)}><FileStack className="size-4" /> Выбрать шаблон</Btn>
+              <Btn variant="ghost" size="sm" onClick={() => setSaveTpl(true)}><Save className="size-4" /> Сохранить шаблон</Btn>
+            </div>
+          )
         } />
 
       <Tabs val={tab} onChange={setTab} tabs={[
@@ -244,7 +280,26 @@ export function TournamentForm({ editId }: { editId: string | null }) {
             <Field label="Стартовый стек" hint="Фишек у каждого игрока на старте"><input type="number" className="inp" value={d.startingStack} onChange={(e) => set({ startingStack: +e.target.value || 0 })} /></Field>
             <Field label="Поздняя регистрация, мин" hint="Сколько минут можно регистрироваться и возвращаться после старта"><input type="number" className="inp" value={d.registrationDuration} onChange={(e) => set({ registrationDuration: +e.target.value || 0 })} /></Field>
             <Field label="Финальный стол, игроков" hint="При каком числе игроков включается режим финального стола"><input type="number" className="inp" value={d.finalTablePlayers} onChange={(e) => set({ finalTablePlayers: +e.target.value || 0 })} /></Field>
-            <div className="flex items-end pb-2"><Toggle checked={d.pointsForKnockout} onChange={(v) => set({ pointsForKnockout: v })} label="Очки за выбивание (+5 за нокаут)" /></div>
+            <div className="sm:col-span-2 rounded-2xl border border-line bg-white/[0.025] p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <Toggle checked={d.pointsForKnockout} onChange={(v) => set({ pointsForKnockout: v })} label="Очки за выбивание (баунти)" />
+                {d.pointsForKnockout && (
+                  <div className="w-[150px]">
+                    <NumIn label="Очков за нокаут" v={d.knockoutPoints} on={(v) => set({ knockoutPoints: v })} />
+                  </div>
+                )}
+              </div>
+              <p className="mt-2 text-[12px] font-semibold text-dim">Очки начисляются автоматически при подведении итогов: за каждого выбитого игрока.</p>
+            </div>
+            <div className="sm:col-span-2 rounded-2xl border border-line bg-white/[0.025] p-4">
+              <p className="lbl !mb-3 flex items-center gap-2"><Coins className="size-4 text-(--acc)" /> Возврат в игру — размер в фишках</p>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <NumIn label="Ребай (Rebuy)" v={d.rebuyChips} on={(v) => set({ rebuyChips: v })} />
+                <NumIn label="Ре-энтри (Re-entry)" v={d.reentryChips} on={(v) => set({ reentryChips: v })} />
+                <NumIn label="Адд-он (Addon)" v={d.addonChips} on={(v) => set({ addonChips: v })} />
+              </div>
+              <p className="mt-2 text-[12px] font-semibold text-dim">Эти суммы вводятся в игру при возврате участника на пульте и прибавляются к общему банку турнира. Ласт Шанс — сумма задаётся вручную.</p>
+            </div>
             <div className="sm:col-span-2"><Field label="Описание турнира"><textarea className="inp min-h-[88px]" value={d.description} onChange={(e) => set({ description: e.target.value })} /></Field></div>
           </div>
         )}
@@ -342,8 +397,12 @@ export function TournamentForm({ editId }: { editId: string | null }) {
       </div>
 
       <div className="mt-4 flex flex-wrap justify-end gap-2">
-        <Btn variant="ghost" onClick={() => nav("/app/tournaments")}>Отмена</Btn>
-        <Btn size="lg" onClick={doSave}><Save className="size-4.5" /> {editing ? "Сохранить изменения" : "Создать турнир"}</Btn>
+        <Btn variant="ghost" onClick={() => nav(tplMode ? "/app/templates" : "/app/tournaments")}>Отмена</Btn>
+        {tplMode ? (
+          <Btn size="lg" onClick={doSaveTpl}><FileStack className="size-4.5" /> {srcTpl ? "Сохранить шаблон" : "Создать шаблон"}</Btn>
+        ) : (
+          <Btn size="lg" onClick={doSave}><Save className="size-4.5" /> {editing ? "Сохранить изменения" : "Создать турнир"}</Btn>
+        )}
       </div>
 
       <Modal open={tplOpen} onClose={() => setTplOpen(false)} title="Выбрать шаблон" subtitle="Параметры, структура, бонусы и очки подставятся автоматически" w="max-w-xl">
@@ -395,6 +454,9 @@ export function TournamentSeats({ tid, ro }: { tid: string; ro: boolean }) {
   const [q, setQ] = useState("");
   const [dragUid, setDragUid] = useState<string | null>(null);
   const [selUid, setSelUid] = useState<string | null>(null);
+  const [pickSeat, setPickSeat] = useState<string | null>(null);
+  const [pickQ, setPickQ] = useState("");
+  const [occSeat, setOccSeat] = useState<string | null>(null);
   if (!t) return <Empty title="Турнир не найден" />;
 
   const regs = Object.entries(t.registeredPlayers).sort((a, b) => (a[1].playerNumber ?? 999) - (b[1].playerNumber ?? 999));
@@ -494,7 +556,9 @@ export function TournamentSeats({ tid, ro }: { tid: string; ro: boolean }) {
             <div className={cn("panel p-4 transition", selUid && "ring-1 ring-(--acc-line)")}>
               <p className="lbl flex items-center justify-between">
                 <span className="flex items-center gap-2"><Shuffle className="size-4 text-(--acc)" /> Участники без места ({unseated.length})</span>
-                {selUid && <span className="text-[10.5px] normal-case tracking-normal text-(--acc)">выбран: {s.users[selUid]?.nickname} — кликните на место</span>}
+                {selUid
+                  ? <span className="text-[10.5px] normal-case tracking-normal text-(--acc)">выбран: {s.users[selUid]?.nickname} — кликните на место</span>
+                  : <span className="hidden text-[10.5px] normal-case tracking-normal text-dim sm:inline">перетащите или кликните на свободное место</span>}
               </p>
               <div className="flex min-h-[64px] flex-wrap gap-2 pt-1"
                 onDragOver={(e) => e.preventDefault()}
@@ -523,9 +587,14 @@ export function TournamentSeats({ tid, ro }: { tid: string; ro: boolean }) {
                         <div key={code}
                           onDragOver={(e) => e.preventDefault()}
                           onDrop={(e) => { e.preventDefault(); const u = e.dataTransfer.getData("uid") || dragUid; if (u && !ro) { const err = setSeat(t.id, u, code); if (err) toast(err, "err"); setDragUid(null); } }}
-                          onClick={() => { if (occ) { setSelUid(null); } else trySeat(code); }}
+                          onClick={() => {
+                            if (ro) return;
+                            if (occ) { setOccSeat(code); setSelUid(null); }
+                            else if (selUid) trySeat(code);
+                            else { setPickQ(""); setPickSeat(code); }
+                          }}
                           className={cn("relative min-h-[74px] rounded-xl border transition-all duration-200",
-                            occ ? "border-line bg-white/[0.05]" : "border-dashed border-line bg-white/[0.02] hover:border-(--acc-line) hover:bg-(--acc-soft) cursor-pointer",
+                            occ ? "cursor-pointer border-line bg-white/[0.05] hover:border-warn/50" : "border-dashed border-line bg-white/[0.02] hover:border-(--acc-line) hover:bg-(--acc-soft) cursor-pointer",
                             selUid && !occ && "border-(--acc-line) bg-(--acc-soft) pulse-live")}>
                           <span className="num absolute right-2 top-1.5 text-[10.5px] font-extrabold text-dim">{code}</span>
                           {occ ? (
@@ -546,6 +615,63 @@ export function TournamentSeats({ tid, ro }: { tid: string; ro: boolean }) {
           </div>
         </Reveal>
       </div>
+
+      {/* ручной выбор игрока на свободное место */}
+      <Modal open={!!pickSeat} onClose={() => setPickSeat(null)} title={`Место ${pickSeat ?? ""}`} subtitle="Выберите участника — он будет посажен вручную" w="max-w-md">
+        <div className="relative mb-3">
+          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-dim" />
+          <input className="inp pl-9" autoFocus placeholder="Поиск среди зарегистрированных без места…" value={pickQ} onChange={(e) => setPickQ(e.target.value)} />
+        </div>
+        <div className="max-h-[320px] space-y-1.5 overflow-y-auto pr-1">
+          {unseated
+            .filter(([u]) => ((s.users[u]?.nickname ?? "") + " " + (s.users[u]?.firstName ?? "")).toLowerCase().includes(pickQ.toLowerCase()))
+            .map(([u, r]) => (
+              <button key={u} onClick={() => {
+                const err = setSeat(t.id, u, pickSeat);
+                if (err) { toast(err, "err"); return; }
+                toast(`${s.users[u]?.nickname} → место ${pickSeat}`);
+                setPickSeat(null);
+              }}
+                className="flex w-full items-center gap-3 rounded-xl border border-line bg-white/[0.03] px-3 py-2.5 text-left transition hover:border-(--acc-line) hover:bg-(--acc-soft)">
+                <Avatar user={s.users[u]} size={34} />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[13.5px] font-bold">{s.users[u]?.nickname}</span>
+                  <span className="text-[11.5px] font-semibold text-dim">№ {r.playerNumber ?? "—"} · {s.users[u]?.firstName} {s.users[u]?.lastName}</span>
+                </span>
+                <span className="num rounded-lg bg-(--acc-soft) px-2.5 py-1 text-[12px] font-extrabold text-(--acc)">{pickSeat}</span>
+              </button>
+            ))}
+          {unseated.length === 0 && <p className="py-6 text-center text-[13px] font-semibold text-dim">Нет участников без места — зарегистрируйте игроков слева</p>}
+        </div>
+      </Modal>
+
+      {/* действия с занятым местом */}
+      <Modal open={!!occSeat} onClose={() => setOccSeat(null)} title={`Место ${occSeat ?? ""}`} subtitle="Занято участником" w="max-w-sm">
+        {(() => {
+          const u = occSeat ? t.tables.seats[occSeat] : null;
+          const r = u ? t.registeredPlayers[u] : null;
+          if (!u || !r) return null;
+          return (
+            <div className="space-y-4">
+              <div className="flex items-center gap-3.5 rounded-2xl border border-line bg-white/[0.03] p-3.5">
+                <Avatar user={s.users[u]} size={46} ring />
+                <div>
+                  <p className="font-display text-[15px] font-extrabold">{s.users[u]?.nickname}</p>
+                  <p className="text-[12.5px] font-semibold text-mut">{s.users[u]?.firstName} {s.users[u]?.lastName} · участник № {r.playerNumber ?? "—"}</p>
+                  <p className="num mt-0.5 text-[12px] font-extrabold text-(--acc)">{r.playerNumber ?? "—"} — {occSeat}</p>
+                </div>
+              </div>
+              {!ro && (
+                <Btn variant="soft" className="w-full" onClick={() => {
+                  setSeat(t.id, u, null);
+                  toast(`${s.users[u]?.nickname} возвращён в список без места`, "info");
+                  setOccSeat(null);
+                }}><Users className="size-4" /> Вернуть в «Участники без места»</Btn>
+              )}
+            </div>
+          );
+        })()}
+      </Modal>
     </div>
   );
 }

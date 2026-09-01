@@ -2,12 +2,12 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Pause, Play, Coffee, SkipBack, SkipForward, Minus, Plus, Skull, Gift, Flag,
-  Coins, Users, Zap, Repeat, Sparkles, Trophy, Hourglass, ChevronRight, AlertTriangle,
+  Coins, Users, Zap, Repeat, Sparkles, Trophy, Hourglass, AlertTriangle, ArrowDownToLine,
 } from "lucide-react";
 import {
-  useDb, Tournament, fmtClock, fmtNum, levelInfo, nextLevelOf, chipsInPlay, lateRegOpen,
+  useDb, Tournament, fmtClock, fmtNum, levelInfo, nextLevelOf, bankChips, lateRegOpen,
   togglePause, stepLevel, addMinute, startBreak, eliminate, returnPlayer, giveBonus,
-  finishTournament, ReturnMethod, playSound, plural, capacity,
+  finishTournament, withdrawChips, returnChipsFor, ReturnMethod, playSound, plural,
 } from "../lib/db";
 import { Avatar, Badge, Btn, Empty, Modal, Reveal, Select, cn, toast } from "../lib/ui";
 
@@ -20,6 +20,9 @@ export default function Pult({ preselect }: { preselect?: string }) {
   const [modal, setModal] = useState<"knock" | "bonus" | "finish" | null>(null);
   const [outUid, setOutUid] = useState(""); const [byUid, setByUid] = useState("");
   const [bonusId, setBonusId] = useState(""); const [bonusUid, setBonusUid] = useState("");
+  const [wd, setWd] = useState("");
+  const [lcUid, setLcUid] = useState<string | null>(null);
+  const [lcChips, setLcChips] = useState("");
 
   const candidates = useMemo(
     () => Object.values(s.tournaments).filter((t) => t.status !== "completed").sort((a, b) => Number(b.status === "active") - Number(a.status === "active")),
@@ -45,7 +48,8 @@ export default function Pult({ preselect }: { preselect?: string }) {
   const regLeft = t.registrationDuration * 60 - p.elapsedSeconds;
   const playersIn = Object.values(t.registeredPlayers).filter((r) => !r.isEliminated).length;
   const playersTotal = Object.keys(t.registeredPlayers).length;
-  const bank = chipsInPlay(t);
+  const bank = bankChips(t);
+  const withdrawn = t.withdrawn ?? 0;
   const activePlayers = Object.entries(t.registeredPlayers).filter(([, r]) => !r.isEliminated);
   const eliminated = Object.entries(p.eliminated).sort((a, b) => b[1].eliminatedAt - a[1].eliminatedAt);
   const totalLevels = t.structure.levels.length;

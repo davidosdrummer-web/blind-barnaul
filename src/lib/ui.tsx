@@ -89,15 +89,36 @@ export function StatusBadge({ status }: { status: "planned" | "active" | "comple
 export function Avatar({ user, size = 40, ring = false, className }: { user: Partial<User> | null | undefined; size?: number; ring?: boolean; className?: string }) {
   const init = user ? `${user.firstName?.[0] ?? ""}${user.lastName?.[0] ?? ""}` : "—";
   const hue = user?.hue ?? 210;
+  const img = user?.avatar;
   return (
     <span className={cn("relative inline-grid shrink-0 place-items-center rounded-full font-display font-bold text-white select-none", ring && "chip-ring p-[2.5px]", className)}
       style={{ width: size, height: size }}>
-      <span className="grid h-full w-full place-items-center rounded-full"
+      <span className="grid h-full w-full place-items-center overflow-hidden rounded-full"
         style={{ background: `linear-gradient(140deg, hsl(${hue} 55% 46%), hsl(${hue + 40} 60% 26%))`, fontSize: size * 0.34 }}>
-        {init}
+        {img ? <img src={img} alt="" className="h-full w-full object-cover" loading="lazy" /> : init}
       </span>
     </span>
   );
+}
+/** Сжимает выбранное изображение до компактного dataURL-аватара (для сохранения в БД). */
+export function fileToAvatar(file: File, max = 192): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const rd = new FileReader();
+    rd.onerror = () => reject(new Error("read"));
+    rd.onload = () => {
+      const im = new Image();
+      im.onerror = () => reject(new Error("img"));
+      im.onload = () => {
+        const k = Math.min(1, max / Math.max(im.width, im.height));
+        const c = document.createElement("canvas");
+        c.width = Math.max(1, Math.round(im.width * k)); c.height = Math.max(1, Math.round(im.height * k));
+        c.getContext("2d")!.drawImage(im, 0, 0, c.width, c.height);
+        resolve(c.toDataURL("image/jpeg", 0.82));
+      };
+      im.src = String(rd.result);
+    };
+    rd.readAsDataURL(file);
+  });
 }
 
 /* ============================ MODAL ============================ */
