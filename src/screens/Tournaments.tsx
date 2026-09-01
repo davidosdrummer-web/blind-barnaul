@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Plus, Pencil, Trash2, Play, Users, CalendarDays, Coins, Timer, ListOrdered, Settings2,
@@ -10,7 +10,7 @@ import {
   saveTournament, deleteTournament, launchTournament, registerSelf, cancelSelf, setSeat,
   setPlayerNumber, seatRandom, seatByRating, saveTemplate, sortedSeatCodes,
   tableCounts, balanceErrorForSeat,
-  fmtDate, fmtNum, fmtDateShort, plural, DAY, uid as genId, can, playSound,
+  fmtDate, fmtNum, fmtDateShort, plural, DAY, uid as genId, can,
 } from "../lib/db";
 import { Avatar, Badge, Btn, Empty, Field, Modal, Reveal, SectionTitle, Select, StatusBadge, Tabs, Toggle, cn, toast, useHoverDelay } from "../lib/ui";
 
@@ -447,6 +447,33 @@ function IconBtn({ children, onClick, disabled, danger }: { children: React.Reac
   );
 }
 
+/** Номер участника: свободно вводится (например «31», даже если «3» занят),
+ *  проверяется на уникальность при потере фокуса или Enter. */
+function NumField({ value, onCommit, disabled, title }: { value: number | null; onCommit: (raw: string) => string | null; disabled?: boolean; title?: string }) {
+  const [draft, setDraft] = useState(value == null ? "" : String(value));
+  const [focus, setFocus] = useState(false);
+  useEffect(() => { if (!focus) setDraft(value == null ? "" : String(value)); }, [value, focus]);
+  const commit = (raw: string) => {
+    const clean = raw.trim();
+    const target = clean === "" ? null : Math.max(1, Math.floor(+clean || 0));
+    if (target === value) { setDraft(target == null ? "" : String(target)); return; }
+    const err = onCommit(clean);
+    if (err) { toast(err, "err"); setDraft(value == null ? "" : String(value)); return; }
+    setDraft(target == null ? "" : String(target));
+  };
+  return (
+    <input type="text" inputMode="numeric" placeholder="№" title={title} disabled={disabled}
+      className={cn("inp !min-h-[34px] !w-[62px] !rounded-lg !px-2 !py-1 text-center num !text-[13px] transition-colors",
+        value == null && "!border-warn/60 !bg-warn/10", focus && "!border-(--acc-line) !bg-transparent")}
+      value={draft}
+      onChange={(e) => setDraft(e.target.value.replace(/[^\d]/g, "").slice(0, 4))}
+      onFocus={() => setFocus(true)}
+      onBlur={(e) => { setFocus(false); commit(e.target.value); }}
+      onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+    />
+  );
+}
+
 /* ================================ РЕГИСТРАЦИЯ + СТОЛЫ ================================ */
 export function TournamentSeats({ tid, ro }: { tid: string; ro: boolean }) {
   const s = useDb();
@@ -481,10 +508,6 @@ export function TournamentSeats({ tid, ro }: { tid: string; ro: boolean }) {
     const err = registerSelf(t.id, u.uid);
     if (err) { toast(err, "err"); return; }
     toast(`${u.nickname} зарегистрирован — присвойте номер, чтобы посадить за стол`);
-  };
-  const setNum = (u: string, raw: string) => {
-    const err = setPlayerNumber(t.id, u, raw ? +raw : null);
-    if (err) { toast(err, "err"); playSound("error"); }
   };
   const trySeat = (code: string) => {
     if (!selUid) return;
@@ -552,10 +575,9 @@ export function TournamentSeats({ tid, ro }: { tid: string; ro: boolean }) {
                       <span className="text-[11px] font-semibold text-dim">{r.seatCode ? `место ${r.seatCode}` : r.playerNumber == null ? "без места · нет номера" : "без места"} · {fmtDateShort(r.registeredAt)}</span>
                     </button>
                     <span className="relative">
-                      <input type="number" min={1} placeholder="№" title={r.playerNumber == null ? "Номер участника — обязателен для посадки за стол" : "Номер участника"}
-                        className={cn("inp !min-h-[34px] !w-[62px] !rounded-lg !px-2 !py-1 text-center num !text-[13px]", r.playerNumber == null && "!border-warn/60 !bg-warn/10")}
-                        value={r.playerNumber ?? ""} disabled={ro}
-                        onChange={(e) => setNum(u, e.target.value)} />
+                      <NumField value={r.playerNumber} disabled={ro}
+                        title={r.playerNumber == null ? "Номер участника — обязателен для посадки за стол" : "Номер участника"}
+                        onCommit={(raw) => setPlayerNumber(t.id, u, raw ? +raw : null)} />
                       {r.playerNumber == null && <AlertTriangle className="absolute -right-1 -top-1 size-3.5 text-warn" />}
                     </span>
                     {!ro && <button onClick={() => { cancelSelf(t.id, u); toast("Регистрация отменена", "info"); }} className="text-dim transition hover:text-bad"><X className="size-4" /></button>}

@@ -1,6 +1,6 @@
 import { ReactNode, useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
-import { Maximize, Minimize, Timer, Coins, Users, Skull, Crown } from "lucide-react";
+import { Maximize, Minimize, Timer, Coins, Users, Skull, Crown, Coffee } from "lucide-react";
 import {
   useDb, Root, fmtClock, fmtNum, levelInfo, nextLevelOf, chipsInPlay, computeSeasonRating,
   fmtDate, plural,
@@ -74,7 +74,10 @@ export function TvMain() {
   const next = nextLevelOf(t);
   const running = t.pult.timerStarted && !t.pult.timerPaused;
   const left = Object.values(t.registeredPlayers).filter((r) => !r.isEliminated).length;
-  const dur = (t.pult.currentBreak ? (t.structure.breaks.find((b) => b.afterLevel === t.pult.currentLevel)?.duration ?? 10) : info.lv.duration) * 60;
+  const afterBreak = t.structure.breaks.find((b) => b.afterLevel === t.pult.currentLevel) ?? null;
+  // под таймером — блайнды идущего уровня; на перерыве — уровня, на котором возобновится игра
+  const dispLv = t.pult.currentBreak ? (next ?? info.lv) : info.lv;
+  const dur = (t.pult.currentBreak ? (afterBreak?.duration ?? 10) : info.lv.duration) * 60;
 
   return (
     <TvFrame right={<span className="flex items-center gap-2 rounded-full bg-ok/15 px-4 py-1.5 text-[13px] font-extrabold uppercase tracking-widest text-ok"><span className="relative size-2 rounded-full bg-ok live-dot" />Live</span>}>
@@ -85,43 +88,76 @@ export function TvMain() {
         </div>
         <div className="grid items-center gap-6 lg:grid-cols-[1.35fr_1fr]">
           {/* timer */}
-          <div className="panel relative overflow-hidden p-8 text-center lg:p-10">
+          <div className="panel relative overflow-hidden p-7 text-center lg:p-9">
             <div className="absolute inset-x-0 top-0 h-[3px] bg-(--acc-soft)">
               <div className="h-full bg-(--acc) transition-all duration-1000 ease-linear" style={{ width: `${(t.pult.timeRemaining / dur) * 100}%` }} />
             </div>
-            <p className="text-[14px] font-extrabold uppercase tracking-[0.3em] text-mut">
-              {t.pult.currentBreak ? "Перерыв" : `Уровень ${info.idx} из ${info.total}`}
-            </p>
-            <p key={info.idx + String(t.pult.currentBreak)} className={cn("num anim-pop mx-auto mt-3 font-display font-extrabold leading-none", running && t.pult.timeRemaining <= 30 ? "text-bad blink" : "text-ink")}
-              style={{ fontSize: "clamp(84px, 11vw, 176px)" }}>
+            {/* сверху: статус уровня + что дальше */}
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <span key={String(t.pult.currentBreak) + info.idx}
+                className={cn("anim-pop rounded-full px-4 py-1.5 text-[13px] font-extrabold uppercase tracking-[0.22em]",
+                  t.pult.currentBreak ? "bg-[#ffd76a]/15 text-[#ffd76a] ring-1 ring-[#ffd76a]/40" : "bg-(--acc-soft) text-(--acc) ring-1 ring-(--acc-line)/50")}>
+                {t.pult.currentBreak ? "Перерыв" : `Уровень ${info.idx} из ${info.total}`}
+              </span>
+              {afterBreak && !t.pult.currentBreak && (
+                <span className="anim-pop flex items-center gap-1.5 rounded-full bg-[#ffd76a]/12 px-4 py-1.5 text-[12.5px] font-extrabold uppercase tracking-[0.18em] text-[#ffd76a] ring-1 ring-[#ffd76a]/35">
+                  <Coffee className="size-4" /> после уровня — перерыв {afterBreak.duration} мин
+                </span>
+              )}
+              {next && !t.pult.currentBreak && (
+                <span className="rounded-full bg-white/[0.04] px-4 py-1.5 text-[12.5px] font-bold uppercase tracking-[0.16em] text-mut ring-1 ring-line">
+                  далее: <b className="num text-ink">{fmtNum(next.sb)}/{fmtNum(next.bb)}</b>{next.ante ? <> · анте <b className="num text-ink">{fmtNum(next.ante)}</b></> : null} · {next.duration} мин
+                </span>
+              )}
+              {t.pult.currentBreak && next && (
+                <span className="rounded-full bg-white/[0.04] px-4 py-1.5 text-[12.5px] font-bold uppercase tracking-[0.16em] text-mut ring-1 ring-line">
+                  возобновимся на уровне <b className="num text-ink">{next.level}</b>
+                </span>
+              )}
+            </div>
+            <p key={info.idx + String(t.pult.currentBreak)} className={cn("num anim-pop mx-auto mt-4 font-display font-extrabold leading-none", running && t.pult.timeRemaining <= 30 ? "text-bad blink" : "text-ink")}
+              style={{ fontSize: "clamp(78px, 10vw, 164px)" }}>
               {fmtClock(t.pult.timeRemaining)}
             </p>
-            {next && !t.pult.currentBreak && (
-              <div className="mx-auto mt-6 flex w-fit items-center gap-5 rounded-2xl border border-(--acc-line)/50 bg-(--acc-soft) px-6 py-3.5 backdrop-blur-sm">
-                <p className="text-[12px] font-extrabold uppercase tracking-[0.24em] text-mut">Следующий<br />уровень</p>
-                <p key={next.level} className="num anim-pop font-display text-[clamp(30px,3.6vw,56px)] font-extrabold leading-none text-(--acc)">
-                  {fmtNum(next.sb)} / {fmtNum(next.bb)}
-                </p>
-                <p className="text-[13px] font-bold leading-snug text-mut">
-                  {next.ante ? <>анте {fmtNum(next.ante)}<br /></> : null}
-                  {next.duration} мин
-                </p>
-              </div>
-            )}
+            {/* под таймером: блайнды текущего уровня (на перерыве — уровня, на котором возобновится игра) */}
+            <div key={"bl" + dispLv.level + String(t.pult.currentBreak)} className="anim-pop mx-auto mt-5 grid w-fit grid-cols-3 items-stretch gap-2.5 sm:gap-4">
+              {[
+                { l: "МБ", v: fmtNum(dispLv.sb) },
+                { l: "ББ", v: fmtNum(dispLv.bb) },
+                { l: "Анте", v: dispLv.ante ? fmtNum(dispLv.ante) : "—" },
+              ].map((x) => (
+                <div key={x.l} className="min-w-[92px] rounded-2xl border border-(--acc-line)/50 bg-(--acc-soft) px-5 py-3.5 backdrop-blur-sm">
+                  <p className="text-[11px] font-extrabold uppercase tracking-[0.24em] text-mut">{x.l}</p>
+                  <p className="num mt-1 font-display text-[clamp(28px,3.4vw,52px)] font-extrabold leading-none text-(--acc)">{x.v}</p>
+                </div>
+              ))}
+            </div>
+            <p className="mt-3 text-[12.5px] font-extrabold uppercase tracking-[0.26em] text-dim">
+              {t.pult.currentBreak
+                ? (next ? `блайнды уровня ${next.level} — после перерыва` : "финальный уровень")
+                : `блайнды уровня ${info.idx}`}
+            </p>
           </div>
           {/* blinds + live */}
           <div className="space-y-4">
-            <div className="panel-deep grid grid-cols-3 gap-3 p-4">
-              {[
-                { l: "Малый блайнд", v: t.pult.currentBreak ? "—" : fmtNum(info.lv.sb) },
-                { l: "Большой блайнд", v: t.pult.currentBreak ? "—" : fmtNum(info.lv.bb) },
-                { l: "Анте", v: t.pult.currentBreak ? "—" : info.lv.ante ? fmtNum(info.lv.ante) : "—" },
-              ].map((x) => (
-                <div key={x.l} className="rounded-2xl border border-(--acc-line)/40 bg-(--acc-soft) px-3 py-5 text-center">
-                  <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-mut">{x.l}</p>
-                  <p className="num mt-2 font-display text-[clamp(30px,3.4vw,54px)] font-extrabold leading-none text-(--acc)">{x.v}</p>
-                </div>
-              ))}
+            <div>
+              <div className="panel-deep grid grid-cols-3 gap-3 p-4">
+                {[
+                  { l: "Малый блайнд", v: fmtNum(dispLv.sb) },
+                  { l: "Большой блайнд", v: fmtNum(dispLv.bb) },
+                  { l: "Анте", v: dispLv.ante ? fmtNum(dispLv.ante) : "—" },
+                ].map((x) => (
+                  <div key={x.l} className="rounded-2xl border border-(--acc-line)/40 bg-(--acc-soft) px-3 py-5 text-center">
+                    <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-mut">{x.l}</p>
+                    <p className="num mt-2 font-display text-[clamp(30px,3.4vw,54px)] font-extrabold leading-none text-(--acc)">{x.v}</p>
+                  </div>
+                ))}
+              </div>
+              {t.pult.currentBreak && next && (
+                <p className="mt-2 flex items-center justify-center gap-1.5 text-center text-[12px] font-extrabold uppercase tracking-[0.2em] text-[#ffd76a]">
+                  <Coffee className="size-4" /> показаны блайнды уровня {next.level} — игра после перерыва
+                </p>
+              )}
             </div>
             <div className="grid grid-cols-4 gap-3">
               {[
