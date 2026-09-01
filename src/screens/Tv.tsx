@@ -97,7 +97,16 @@ export function TvMain() {
               {fmtClock(t.pult.timeRemaining)}
             </p>
             {next && !t.pult.currentBreak && (
-              <p className="mt-4 text-[15px] font-bold text-dim">следующий уровень: {fmtNum(next.sb)}/{fmtNum(next.bb)}{next.ante ? ` · анте ${fmtNum(next.ante)}` : ""} · {next.duration} мин</p>
+              <div className="mx-auto mt-6 flex w-fit items-center gap-5 rounded-2xl border border-(--acc-line)/50 bg-(--acc-soft) px-6 py-3.5 backdrop-blur-sm">
+                <p className="text-[12px] font-extrabold uppercase tracking-[0.24em] text-mut">Следующий<br />уровень</p>
+                <p key={next.level} className="num anim-pop font-display text-[clamp(30px,3.6vw,56px)] font-extrabold leading-none text-(--acc)">
+                  {fmtNum(next.sb)} / {fmtNum(next.bb)}
+                </p>
+                <p className="text-[13px] font-bold leading-snug text-mut">
+                  {next.ante ? <>анте {fmtNum(next.ante)}<br /></> : null}
+                  {next.duration} мин
+                </p>
+              </div>
             )}
           </div>
           {/* blinds + live */}
@@ -114,10 +123,11 @@ export function TvMain() {
                 </div>
               ))}
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-4 gap-3">
               {[
                 { icon: <Coins className="size-5" />, l: "Фишек в игре", v: fmtNum(chipsInPlay(t)) },
                 { icon: <Users className="size-5" />, l: "В игре", v: `${left} / ${Object.keys(t.registeredPlayers).length}` },
+                { icon: <Timer className="size-5" />, l: "Средний стек", v: fmtNum(left ? Math.round(chipsInPlay(t) / left) : 0) },
                 { icon: <Skull className="size-5" />, l: "Нокаутов", v: String(t.pult.knockouts) },
               ].map((x) => (
                 <div key={x.l} className="panel-deep px-3 py-4 text-center">
@@ -182,7 +192,6 @@ export function TvFinal() {
                       {entry![0] === chipLeader && (
                         <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-[#ffd76a] px-2 py-0.5 text-[9.5px] font-extrabold uppercase tracking-wider text-black shadow-lg">лидер</span>
                       )}
-                      <span className="num absolute -bottom-1.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full border border-(--acc-line) bg-bg0/90 px-2.5 py-0.5 text-[12px] font-extrabold text-(--acc)">{fmtNum(reg.chips)}</span>
                     </div>
                     <p className="mt-2.5 max-w-[150px] truncate font-display text-[clamp(12px,1.25vw,17px)] font-bold">{u.nickname}</p>
                     <p className="text-[10.5px] font-bold uppercase tracking-wider text-dim">{reg.seatCode ?? ""}</p>
@@ -273,6 +282,20 @@ export function TvRanking() {
   return (
     <TvFrame right={<span className="rounded-full bg-(--acc-soft) px-4 py-1.5 text-[13px] font-extrabold uppercase tracking-widest text-(--acc)">ТОП-20 клуба</span>}>
       <div className="mx-auto flex h-full max-w-[1100px] flex-col py-2">
+        <div className="mb-3 flex flex-wrap items-center justify-center gap-2">
+          <button onClick={() => setMode("all")}
+            className={cn("rounded-full border px-5 py-2 text-[13px] font-extrabold uppercase tracking-wider transition-all duration-300",
+              mode === "all" ? "border-(--acc) bg-(--acc) text-(--acc-ink) shadow-[0_8px_26px_-10px_var(--acc)]" : "border-line bg-white/[0.04] text-mut hover:text-ink hover:border-(--acc-line)")}>
+            Все время
+          </button>
+          {seasons.map((sn, i) => (
+            <button key={sn.id} onClick={() => setMode(i)}
+              className={cn("rounded-full border px-5 py-2 text-[13px] font-extrabold uppercase tracking-wider transition-all duration-300",
+                mode === i ? "border-(--acc) bg-(--acc) text-(--acc-ink) shadow-[0_8px_26px_-10px_var(--acc)]" : "border-line bg-white/[0.04] text-mut hover:text-ink hover:border-(--acc-line)")}>
+              {sn.name.replace(/^Сезон\s*/i, "Сезон ")}
+            </button>
+          ))}
+        </div>
         <div className="mb-4 text-center">
           <p className="text-[12px] font-extrabold uppercase tracking-[0.34em] text-(--acc)">таблица лидеров</p>
           <h1 key={String(mode)} className="anim-pop mt-1 font-display text-[clamp(24px,3.4vw,46px)] font-extrabold">{title}</h1>

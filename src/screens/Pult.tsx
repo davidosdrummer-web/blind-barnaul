@@ -68,6 +68,21 @@ export default function Pult({ preselect }: { preselect?: string }) {
     const err = returnPlayer(t.id, uidv, m);
     if (err) toast(err, "err"); else toast(`${RETURN_LABELS[m]}: игрок вернулся в игру`);
   };
+  const doLastChance = (uidv: string) => {
+    const chips = +lcChips || 0;
+    if (chips <= 0) { toast("Укажите количество фишек для Ласт Шанс", "err"); return; }
+    const err = returnPlayer(t.id, uidv, "last_chance", chips);
+    if (err) { toast(err, "err"); return; }
+    toast(`Ласт Шанс: +${fmtNum(chips)} фишек введено в банк`);
+    setLcUid(null); setLcChips("");
+  };
+  const doWithdraw = () => {
+    const amount = +wd || 0;
+    const err = withdrawChips(t.id, amount);
+    if (err) { toast(err, "err"); return; }
+    toast(`Выведено ${fmtNum(amount)} фишек из банка`);
+    setWd("");
+  };
   const doFinish = () => { finishTournament(t.id); setModal(null); toast("Турнир завершён — итоги подведены, очки начислены"); nav("/app/tournaments"); };
 
   return (
@@ -167,6 +182,17 @@ export default function Pult({ preselect }: { preselect?: string }) {
                 <span className="text-mut">Уровень блайндов</span>
                 <span className="num text-(--acc)">{p.currentBreak ? "перерыв" : `${info.idx} / ${totalLevels}`}</span>
               </div>
+              <div className="mt-3 rounded-xl border border-line bg-white/[0.03] p-3.5">
+                <p className="lbl !mb-2 flex items-center gap-2"><Coins className="size-4 text-(--acc)" /> Вывод фишек из банка</p>
+                <div className="flex items-center gap-2">
+                  <input type="number" placeholder="Кол-во фишек" className="inp !min-h-[42px] num" value={wd} onChange={(e) => setWd(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") doWithdraw(); }} />
+                  <Btn onClick={doWithdraw} disabled={!(+wd > 0)}>Вывести</Btn>
+                </div>
+                <p className="mt-2 text-[11.5px] font-semibold text-dim">
+                  {withdrawn > 0 ? <>Выведено за турнир: <b className="num text-warn">−{fmtNum(withdrawn)}</b> · в банке {fmtNum(bank)}</> : "Сумма вычитается из общего банка турнира"}
+                </p>
+              </div>
             </div>
           </Reveal>
 
@@ -234,17 +260,31 @@ export default function Pult({ preselect }: { preselect?: string }) {
                         ? <Badge tone="ok">в игре · {e.returnMethod ? RETURN_LABELS[e.returnMethod] : ""}</Badge>
                         : <Badge tone="bad">выбыл</Badge>}
                     </div>
-                    {!returned && (
+                    {!returned && (<>
                       <div className="mt-3 grid grid-cols-2 gap-1.5">
                         {(Object.keys(RETURN_LABELS) as ReturnMethod[]).map((m) => (
-                          <button key={m} disabled={!regOpen} onClick={() => doReturn(uidv, m)}
-                            className={cn("rounded-lg border border-line bg-white/[0.04] px-2 py-2 text-[11.5px] font-extrabold text-mut transition hover:border-(--acc-line) hover:text-(--acc)",
-                              !regOpen && "opacity-35 pointer-events-none")}>
-                            {RETURN_LABELS[m]}
+                          <button key={m} disabled={!regOpen}
+                            onClick={() => (m === "last_chance" ? (setLcUid(lcUid === uidv ? null : uidv), setLcChips("")) : doReturn(uidv, m))}
+                            className={cn("rounded-lg border border-line bg-white/[0.04] px-2 py-2 text-center transition hover:border-(--acc-line) hover:text-(--acc)",
+                              !regOpen && "opacity-35 pointer-events-none",
+                              m === "last_chance" && lcUid === uidv && "border-(--acc-line) bg-(--acc-soft) text-(--acc)")}>
+                            <span className="block text-[11.5px] font-extrabold text-mut">{RETURN_LABELS[m]}</span>
+                            <span className="num block text-[10.5px] font-bold text-dim">
+                              {m === "last_chance" ? "сумма вручную" : `+${fmtNum(returnChipsFor(t, m))}`}
+                            </span>
                           </button>
                         ))}
                       </div>
-                    )}
+                      {lcUid === uidv && (
+                        <div className="anim-pop mt-2 flex items-center gap-1.5 rounded-lg border border-(--acc-line) bg-(--acc-soft) p-1.5">
+                          <input autoFocus type="number" placeholder="Кол-во фишек" className="inp !min-h-[38px] !rounded-lg !px-2.5 !py-1 num !text-[13px]"
+                            value={lcChips} onChange={(e) => setLcChips(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === "Enter") doLastChance(uidv); }} />
+                          <Btn size="sm" onClick={() => doLastChance(uidv)}><Repeat className="size-4" /> Вернуть</Btn>
+                        </div>
+                      )}
+                      <p className="mt-1.5 text-[10.5px] font-semibold text-dim">Фишки возврата прибавляются к общему банку турнира</p>
+                    </>)}
                   </div>
                 );
               })}

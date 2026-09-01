@@ -2,13 +2,13 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Pencil, Trophy, Target, Star, Medal, Crown, Zap, Gauge, Award, Users, CalendarDays,
-  BellRing, Megaphone, UserCircle2, CheckCheck, Undo2, Timer, Coins, Repeat,
+  BellRing, Megaphone, UserCircle2, CheckCheck, Undo2, Timer, Coins, Repeat, Camera, Trash2,
 } from "lucide-react";
 import {
   useDb, useMe, computeSeasonRating, registerSelf, cancelSelf, updateProfile, markAllRead, markRead,
   fmtDate, fmtDateShort, fmtNum, plural, capacity, lateRegOpen, Tournament, User, Root,
 } from "../lib/db";
-import { Avatar, Badge, Bars, Btn, Empty, Field, Modal, Reveal, SectionTitle, StatTile, StatusBadge, cn, toast, AchIcon } from "../lib/ui";
+import { Avatar, Badge, Bars, Btn, Empty, Field, Modal, Reveal, SectionTitle, StatTile, StatusBadge, cn, toast, AchIcon, fileToAvatar } from "../lib/ui";
 
 const HUES = [152, 205, 260, 340, 25, 190, 300, 90, 220, 45, 170, 355];
 
@@ -25,23 +25,25 @@ export default function PlayerHome() {
   const me = useMe();
   const nav = useNavigate();
   const [edit, setEdit] = useState(false);
-  const [form, setForm] = useState({ nickname: "", firstName: "", lastName: "", phone: "", email: "", hue: 152 });
+  const [form, setForm] = useState({ nickname: "", firstName: "", lastName: "", phone: "", email: "", hue: 152, avatar: "" });
   if (!me) return null;
 
   const rating = Object.values(s.users).filter((u) => !u.isArchived).sort((a, b) => b.stats.points - a.stats.points);
   const myPlace = rating.findIndex((u) => u.uid === me.uid) + 1;
-  const activeT = Object.values(s.tournaments).find((t) => t.status === "active");
+  const activeT =
+    Object.values(s.tournaments).find((t) => t.status === "active" && t.registeredPlayers[me.uid]) ??
+    Object.values(s.tournaments).find((t) => t.status === "active" && !t.isFinal);
   const myReg = activeT?.registeredPlayers[me.uid];
   const planned = Object.values(s.tournaments).filter((t) => t.status === "planned" && t.registeredPlayers[me.uid]);
   const hist = Object.entries(me.tournamentHistory).sort((a, b) => b[1].date - a[1].date).slice(0, 4);
 
   const openEdit = () => {
-    setForm({ nickname: me.nickname, firstName: me.firstName, lastName: me.lastName, phone: me.phone, email: me.email, hue: me.hue });
+    setForm({ nickname: me.nickname, firstName: me.firstName, lastName: me.lastName, phone: me.phone, email: me.email, hue: me.hue, avatar: me.avatar ?? "" });
     setEdit(true);
   };
   const saveEdit = () => {
     if (!form.nickname.trim() || !form.firstName.trim()) { toast("Никнейм и имя обязательны", "err"); return; }
-    updateProfile(me.uid, form);
+    updateProfile(me.uid, { ...form, avatar: form.avatar || undefined });
     setEdit(false);
     toast("Профиль обновлён");
   };
@@ -148,6 +150,28 @@ export default function PlayerHome() {
       {/* edit modal */}
       <Modal open={edit} onClose={() => setEdit(false)} title="Редактировать профиль" subtitle="Данные видны всем участникам клуба">
         <div className="space-y-4">
+          <div className="flex items-center gap-4 rounded-2xl border border-line bg-white/[0.025] p-4">
+            <Avatar user={{ ...me, nickname: form.nickname, firstName: form.firstName, lastName: form.lastName, hue: form.hue, avatar: form.avatar || undefined }} size={64} ring />
+            <div className="min-w-0 flex-1">
+              <p className="lbl !mb-2">Фото профиля</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="inline-flex min-h-[40px] cursor-pointer items-center gap-2 rounded-xl border border-(--acc-line)/60 bg-(--acc-soft) px-3.5 text-[12.5px] font-extrabold text-(--acc) transition hover:brightness-125">
+                  <Camera className="size-4" /> Загрузить фото
+                  <input type="file" accept="image/*" className="hidden"
+                    onChange={async (e) => {
+                      const f = e.target.files?.[0]; e.target.value = "";
+                      if (!f) return;
+                      try { const url = await fileToAvatar(f); setForm((p) => ({ ...p, avatar: url })); toast("Фото загружено — нажмите «Сохранить»"); }
+                      catch { toast("Не удалось прочитать изображение", "err"); }
+                    }} />
+                </label>
+                {form.avatar && (
+                  <Btn variant="ghost" size="sm" onClick={() => setForm((p) => ({ ...p, avatar: "" }))}><Trash2 className="size-4" /> Удалить фото</Btn>
+                )}
+              </div>
+              <p className="mt-1.5 text-[11.5px] font-semibold text-dim">JPG или PNG — изображение сжимается автоматически. Без фото используются инициалы.</p>
+            </div>
+          </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Никнейм"><input className="inp" value={form.nickname} onChange={(e) => setForm({ ...form, nickname: e.target.value })} /></Field>
             <Field label="Телефон"><input className="inp" type="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
@@ -179,7 +203,10 @@ export function PlayerTournaments() {
   const s = useDb();
   const me = useMe();
   if (!me) return null;
-  const open = Object.values(s.tournaments).filter((t) => t.status !== "completed").sort((a, b) => a.startDate - b.startDate);
+  const open = Object.values(s.tournaments)
+    .filter((t) => t.status !== "completed")
+    .filter((t) => !(t.isFinal && !t.registeredPlayers[me.uid])) // финал сезона видят только приглашённые
+    .sort((a, b) => a.startDate - b.startDate);
   const hist = Object.entries(me.tournamentHistory).sort((a, b) => b[1].date - a[1].date);
 
   const onReg = (t: Tournament) => {
