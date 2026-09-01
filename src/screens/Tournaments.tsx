@@ -388,7 +388,7 @@ export function TournamentForm({ editId, templateId }: { editId: string | null; 
             <div className="mt-4 flex flex-wrap gap-1.5">
               {Array.from({ length: d.tables.totalTables * d.tables.seatsPerTable }, (_, i) => {
                 const tb = Math.floor(i / d.tables.seatsPerTable) + 1; const st = (i % d.tables.seatsPerTable) + 1;
-                return <span key={i} className="num rounded-lg border border-line bg-white/[0.03] px-2.5 py-1.5 text-[12px] font-bold text-mut">С{tb}-{st}</span>;
+                return <span key={i} className="num rounded-lg border border-line bg-white/[0.03] px-2.5 py-1.5 text-[12px] font-bold text-mut">C{tb}-{st}</span>;
               })}
             </div>
             <p className="mt-3 text-[12px] font-semibold text-dim">Каждое место получает код: Стол 1 — место 1 → С1-1</p>
@@ -573,41 +573,58 @@ export function TournamentSeats({ tid, ro }: { tid: string; ro: boolean }) {
 
             {Array.from({ length: t.tables.totalTables }, (_, ti) => {
               const tb = ti + 1;
-              const tCodes = codes.filter((c) => c.startsWith(`С${tb}-`));
+              const tCodes = codes.filter((c) => c.startsWith(`C${tb}-`));
+              const occCnt = tCodes.filter((c) => t.tables.seats[c]).length;
               return (
-                <div key={tb} className="panel p-4 sm:p-5">
-                  <p className="lbl !mb-3 flex items-center justify-between">
-                    <span>Стол {tb}</span>
-                    <span className="normal-case tracking-normal text-dim">{tCodes.filter((c) => t.tables.seats[c]).length}/{t.tables.seatsPerTable} занято</span>
-                  </p>
-                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-3 2xl:grid-cols-4">
-                    {tCodes.map((code) => {
-                      const occ = t.tables.seats[code];
-                      return (
-                        <div key={code}
-                          onDragOver={(e) => e.preventDefault()}
-                          onDrop={(e) => { e.preventDefault(); const u = e.dataTransfer.getData("uid") || dragUid; if (u && !ro) { const err = setSeat(t.id, u, code); if (err) toast(err, "err"); setDragUid(null); } }}
-                          onClick={() => {
-                            if (ro) return;
-                            if (occ) { setOccSeat(code); setSelUid(null); }
-                            else if (selUid) trySeat(code);
-                            else { setPickQ(""); setPickSeat(code); }
-                          }}
-                          className={cn("relative min-h-[74px] rounded-xl border transition-all duration-200",
-                            occ ? "cursor-pointer border-line bg-white/[0.05] hover:border-warn/50" : "border-dashed border-line bg-white/[0.02] hover:border-(--acc-line) hover:bg-(--acc-soft) cursor-pointer",
-                            selUid && !occ && "border-(--acc-line) bg-(--acc-soft) pulse-live")}>
-                          <span className="num absolute right-2 top-1.5 text-[10.5px] font-extrabold text-dim">{code}</span>
-                          {occ ? (
-                            <div className="flex h-full flex-col items-center justify-center gap-1 p-2 pt-4">
-                              <PlayerChip uid={occ} nick={s.users[occ]?.nickname ?? "?"} num={t.registeredPlayers[occ]?.playerNumber ?? null} seat={code} user={s.users[occ]}
-                                compact onDrag={setDragUid} ro={ro} sel={false} onSelect={() => {}} />
-                            </div>
-                          ) : (
-                            <span className="grid h-full place-items-center text-[11px] font-bold text-dim">свободно</span>
-                          )}
-                        </div>
-                      );
-                    })}
+                <div key={tb} className="panel overflow-hidden">
+                  <div className="felt stitched flex items-center justify-between px-4 py-3 sm:px-5">
+                    <span className="flex items-center gap-2.5">
+                      <span className="grid size-8 place-items-center rounded-full bg-black/30 ring-1 ring-white/20">
+                        <LayoutGrid className="size-4 text-[#ffd76a]" />
+                      </span>
+                      <span className="font-display text-[14px] font-extrabold tracking-wide text-white">Стол {tb}</span>
+                    </span>
+                    <span className="num rounded-full bg-black/35 px-3 py-1 text-[12px] font-extrabold text-white/85 ring-1 ring-white/15">
+                      {occCnt} / {t.tables.seatsPerTable} занято
+                    </span>
+                  </div>
+                  <div className="p-3.5 sm:p-4">
+                    <div className="grid grid-cols-3 gap-2 lg:grid-cols-5">
+                      {tCodes.map((code) => {
+                        const occ = t.tables.seats[code];
+                        const occReg = occ ? t.registeredPlayers[occ] : null;
+                        return (
+                          <div key={code}
+                            onDragOver={(e) => e.preventDefault()}
+                            onDrop={(e) => { e.preventDefault(); const u = e.dataTransfer.getData("uid") || dragUid; if (u && !ro) { const err = setSeat(t.id, u, code); if (err) toast(err, "err"); setDragUid(null); } }}
+                            onClick={() => {
+                              if (ro) return;
+                              if (occ) { setOccSeat(code); setSelUid(null); }
+                              else if (selUid) trySeat(code);
+                              else { setPickQ(""); setPickSeat(code); }
+                            }}
+                            className={cn("group/seat relative min-h-[86px] cursor-pointer rounded-xl border transition-all duration-200",
+                              occ ? "border-line bg-white/[0.05] hover:border-warn/50 hover:bg-warn/10" : "border-dashed border-line bg-white/[0.02] hover:border-(--acc-line) hover:bg-(--acc-soft)",
+                              selUid && !occ && "border-(--acc-line) bg-(--acc-soft) pulse-live")}>
+                            <span className={cn("num absolute left-2 top-1.5 rounded-md px-1.5 py-0.5 text-[10px] font-extrabold", occ ? "bg-(--acc-soft) text-(--acc)" : "bg-white/[0.05] text-dim")}>{code}</span>
+                            {occ ? (
+                              <div className="flex h-full flex-col items-center justify-center gap-1.5 p-2 pt-6">
+                                <Avatar user={s.users[occ]} size={34} />
+                                <span className="max-w-full truncate text-[11.5px] font-bold leading-none">{s.users[occ]?.nickname ?? "?"}</span>
+                                <span className="num text-[10px] font-extrabold text-dim">
+                                  {occReg?.playerNumber != null ? `#${occReg.playerNumber}` : "без номера"}
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="flex h-full flex-col items-center justify-center gap-1 p-2 pt-4 text-dim transition group-hover/seat:text-(--acc)">
+                                <Plus className="size-4.5 opacity-40 transition group-hover/seat:opacity-100" />
+                                <span className="text-[10.5px] font-extrabold uppercase tracking-wide">{selUid ? "посадить сюда" : "свободно"}</span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               );

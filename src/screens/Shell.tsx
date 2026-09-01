@@ -58,7 +58,7 @@ function useSectionRenderer() {
       return <TournamentsList />;
     case "templates":
       if (p1 === "new") return <TournamentForm editId={null} templateId="new" />;
-      if (p1 && p2 === "edit") return <TournamentForm editId={null} templateId={p1} />;
+      if (p1 === "edit" && p2) return <TournamentForm editId={null} templateId={p2} />;
       return <Templates ro={!isAdmin} />;
     case "members": return <Members ro={!isAdmin} />;
     case "rating": return <AdminRating />;
