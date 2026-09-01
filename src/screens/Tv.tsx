@@ -93,9 +93,9 @@ export function TvMain() {
           <p className="text-[13px] font-extrabold uppercase tracking-[0.34em] text-(--acc)">Турнир клуба</p>
           <h1 className="mt-2 font-display text-[clamp(28px,4.5vw,60px)] font-extrabold leading-tight">«{t.name}»</h1>
         </div>
-        <div className="grid items-center gap-6 lg:grid-cols-[1.35fr_1fr]">
+        <div className="grid items-stretch gap-6 lg:grid-cols-[1.35fr_1fr]">
           {/* timer */}
-          <div className="panel relative overflow-hidden p-7 text-center lg:p-9">
+          <div className="panel relative flex flex-col justify-center overflow-hidden p-7 text-center lg:p-9">
             <div className="absolute inset-x-0 top-0 h-[3px] bg-(--acc-soft)">
               <div className="h-full bg-(--acc) transition-all duration-1000 ease-linear" style={{ width: `${(t.pult.timeRemaining / dur) * 100}%` }} />
             </div>
@@ -145,19 +145,24 @@ export function TvMain() {
                 : `блайнды уровня ${info.idx}`}
             </p>
           </div>
-          {/* live metrics */}
-          <div className="flex flex-col justify-center gap-4">
-            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-              {[
-                { icon: <Coins className="size-6" />, l: "Фишек в игре", v: fmtNum(chipsInPlay(t)) },
-                { icon: <Users className="size-6" />, l: "В игре", v: `${left} / ${Object.keys(t.registeredPlayers).length}` },
-                { icon: <Timer className="size-6" />, l: "Средний стек", v: fmtNum(left ? Math.round(chipsInPlay(t) / left) : 0) },
-                { icon: <Skull className="size-6" />, l: "Нокаутов", v: String(t.pult.knockouts) },
-              ].map((x) => (
-                <div key={x.l} className="panel-deep px-3 py-6 text-center transition-transform duration-300 hover:-translate-y-1">
-                  <span className="mx-auto grid size-11 place-items-center rounded-xl bg-(--acc-soft) text-(--acc)">{x.icon}</span>
-                  <p className="num mt-2.5 text-[clamp(20px,2.2vw,32px)] font-extrabold leading-none">{x.v}</p>
-                  <p className="mt-1.5 text-[10.5px] font-extrabold uppercase tracking-[0.16em] text-dim">{x.l}</p>
+          {/* live metrics — 2×2 */}
+          <div className="flex h-full flex-col gap-3.5">
+            <div className="grid flex-1 grid-cols-2 grid-rows-2 gap-3.5">
+              {([
+                { icon: <Coins className="size-5.5" />, l: "Фишек в игре", v: fmtNum(chipsInPlay(t)), suit: "spade" as const },
+                { icon: <Users className="size-5.5" />, l: "В игре", v: `${left} / ${Object.keys(t.registeredPlayers).length}`, suit: "heart" as const },
+                { icon: <Timer className="size-5.5" />, l: "Средний стек", v: fmtNum(left ? Math.round(chipsInPlay(t) / left) : 0), suit: "diamond" as const },
+                { icon: <Skull className="size-5.5" />, l: "Нокаутов", v: String(t.pult.knockouts), suit: "club" as const },
+              ]).map((x, i) => (
+                <div key={x.l}
+                  className="anim-in panel-deep group relative flex flex-col justify-between overflow-hidden p-4 transition-all duration-300 hover:-translate-y-1 hover:border-(--acc-line)/70 lg:p-5"
+                  style={{ animationDelay: `${0.15 + i * 0.12}s` }}>
+                  <Suit s={x.suit} className="pointer-events-none absolute -bottom-4 -right-3 size-20 text-white/[0.04] transition-transform duration-500 group-hover:rotate-12 group-hover:text-white/[0.07]" />
+                  <span className="relative grid size-10 place-items-center rounded-xl bg-(--acc-soft) text-(--acc) ring-1 ring-(--acc-line)/40 transition-transform duration-300 group-hover:scale-110">{x.icon}</span>
+                  <div className="relative">
+                    <p key={x.v} className="num anim-pop text-[clamp(22px,2.6vw,38px)] font-extrabold leading-none">{x.v}</p>
+                    <p className="mt-1.5 text-[10.5px] font-extrabold uppercase tracking-[0.18em] text-dim">{x.l}</p>
+                  </div>
                 </div>
               ))}
             </div>
