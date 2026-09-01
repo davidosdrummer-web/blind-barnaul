@@ -59,16 +59,23 @@ function TvFrame({ children, right }: { children: ReactNode; right?: ReactNode }
   );
 }
 
-function useTournament(fallbackId?: string) {
+function useTournament(screenKey?: "main" | "final" | "results") {
   const s = useDb();
   const { tid } = useParams();
-  const t = s.tournaments[tid ?? ""] ?? (fallbackId && s.tournaments[fallbackId]) ?? Object.values(s.tournaments).find((x) => x.status === "active") ?? Object.values(s.tournaments)[0];
+  const cfgId = screenKey ? s.screens[screenKey]?.tournamentId : undefined;
+  const all = Object.values(s.tournaments);
+  // приоритет: турнир из URL → выбранный админом в разделе «Экраны» → активный → завершённый с итогами
+  const t = s.tournaments[tid ?? ""]
+    ?? (cfgId ? s.tournaments[cfgId] : undefined)
+    ?? all.find((x) => x.status === "active")
+    ?? all.find((x) => x.status === "completed" && x.results)
+    ?? all[0];
   return { s, t };
 }
 
 /* ================================ MAIN SCREEN ================================ */
 export function TvMain() {
-  const { s, t } = useTournament(s0main());
+  const { s, t } = useTournament("main");
   if (!t) return <TvFrame><p className="grid h-full place-items-center font-display text-2xl text-mut">Нет турниров</p></TvFrame>;
   const info = levelInfo(t);
   const next = nextLevelOf(t);
@@ -138,50 +145,29 @@ export function TvMain() {
                 : `блайнды уровня ${info.idx}`}
             </p>
           </div>
-          {/* blinds + live */}
-          <div className="space-y-4">
-            <div>
-              <div className="panel-deep grid grid-cols-3 gap-3 p-4">
-                {[
-                  { l: "Малый блайнд", v: fmtNum(dispLv.sb) },
-                  { l: "Большой блайнд", v: fmtNum(dispLv.bb) },
-                  { l: "Анте", v: dispLv.ante ? fmtNum(dispLv.ante) : "—" },
-                ].map((x) => (
-                  <div key={x.l} className="rounded-2xl border border-(--acc-line)/40 bg-(--acc-soft) px-3 py-5 text-center">
-                    <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-mut">{x.l}</p>
-                    <p className="num mt-2 font-display text-[clamp(30px,3.4vw,54px)] font-extrabold leading-none text-(--acc)">{x.v}</p>
-                  </div>
-                ))}
-              </div>
-              {t.pult.currentBreak && next && (
-                <p className="mt-2 flex items-center justify-center gap-1.5 text-center text-[12px] font-extrabold uppercase tracking-[0.2em] text-[#ffd76a]">
-                  <Coffee className="size-4" /> показаны блайнды уровня {next.level} — игра после перерыва
-                </p>
-              )}
-            </div>
-            <div className="grid grid-cols-4 gap-3">
+          {/* live metrics */}
+          <div className="flex flex-col justify-center gap-4">
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
               {[
-                { icon: <Coins className="size-5" />, l: "Фишек в игре", v: fmtNum(chipsInPlay(t)) },
-                { icon: <Users className="size-5" />, l: "В игре", v: `${left} / ${Object.keys(t.registeredPlayers).length}` },
-                { icon: <Timer className="size-5" />, l: "Средний стек", v: fmtNum(left ? Math.round(chipsInPlay(t) / left) : 0) },
-                { icon: <Skull className="size-5" />, l: "Нокаутов", v: String(t.pult.knockouts) },
+                { icon: <Coins className="size-6" />, l: "Фишек в игре", v: fmtNum(chipsInPlay(t)) },
+                { icon: <Users className="size-6" />, l: "В игре", v: `${left} / ${Object.keys(t.registeredPlayers).length}` },
+                { icon: <Timer className="size-6" />, l: "Средний стек", v: fmtNum(left ? Math.round(chipsInPlay(t) / left) : 0) },
+                { icon: <Skull className="size-6" />, l: "Нокаутов", v: String(t.pult.knockouts) },
               ].map((x) => (
-                <div key={x.l} className="panel-deep px-3 py-4 text-center">
-                  <span className="mx-auto grid size-9 place-items-center rounded-xl bg-(--acc-soft) text-(--acc)">{x.icon}</span>
-                  <p className="num mt-2 text-[clamp(17px,1.8vw,26px)] font-extrabold">{x.v}</p>
-                  <p className="text-[10.5px] font-extrabold uppercase tracking-[0.16em] text-dim">{x.l}</p>
+                <div key={x.l} className="panel-deep px-3 py-6 text-center transition-transform duration-300 hover:-translate-y-1">
+                  <span className="mx-auto grid size-11 place-items-center rounded-xl bg-(--acc-soft) text-(--acc)">{x.icon}</span>
+                  <p className="num mt-2.5 text-[clamp(20px,2.2vw,32px)] font-extrabold leading-none">{x.v}</p>
+                  <p className="mt-1.5 text-[10.5px] font-extrabold uppercase tracking-[0.16em] text-dim">{x.l}</p>
                 </div>
               ))}
             </div>
-            <p className="text-center text-[13px] font-bold text-dim">старт: {fmtDate(t.startDate)} · поздняя регистрация {t.registrationDuration} мин · стек {fmtNum(t.startingStack)}</p>
+            <p className="text-center text-[13px] font-bold text-dim">старт: {fmtDate(t.startDate)} · поздняя регистрация {t.registrationDuration} мин · стартовый стек {fmtNum(t.startingStack)}</p>
           </div>
         </div>
       </div>
     </TvFrame>
   );
 }
-function s0main() { return undefined; }
-
 /* ================================ FINAL TABLE ================================ */
 const SEAT_POS = [
   { x: 50, y: 93 }, { x: 24, y: 85 }, { x: 76, y: 85 },
@@ -189,7 +175,7 @@ const SEAT_POS = [
   { x: 30, y: 5 }, { x: 70, y: 5 },
 ];
 export function TvFinal() {
-  const { s, t } = useTournament();
+  const { s, t } = useTournament("final");
   if (!t) return <TvFrame><p className="grid h-full place-items-center font-display text-2xl text-mut">Нет турниров</p></TvFrame>;
   const regs = Object.entries(t.registeredPlayers).filter(([, r]) => !r.isEliminated).sort((a, b) => b[1].chips - a[1].chips);
   const totalLeft = regs.length;
@@ -248,7 +234,7 @@ export function TvFinal() {
 
 /* ================================ RESULTS ================================ */
 export function TvResults() {
-  const { s, t } = useTournament();
+  const { s, t } = useTournament("results");
   if (!t || !t.results) return <TvFrame><p className="grid h-full place-items-center font-display text-2xl text-mut">Итоги появятся после завершения турнира</p></TvFrame>;
   const winner = s.users[t.results.winner];
   const top = t.results.ranking.slice(0, 10);

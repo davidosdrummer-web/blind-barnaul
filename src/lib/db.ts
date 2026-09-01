@@ -423,7 +423,7 @@ function seed(): Root {
 }
 
 /* ============================== STORE ============================== */
-const KEY = "pd-club-db-v2";
+const KEY = "pd-club-db-v3";
 function load(): Root | null {
   try {
     const raw = localStorage.getItem(KEY);
