@@ -3,12 +3,13 @@ import { useNavigate } from "react-router-dom";
 import {
   Plus, Pencil, Trash2, Play, Users, CalendarDays, Coins, Timer, ListOrdered, Settings2,
   Gift, LayoutGrid, ChevronUp, ChevronDown, Search, X, Shuffle, SortDesc, Zap, FileStack,
-  Save, ArrowLeft, ExternalLink, Trophy, Dices,
+  Save, ArrowLeft, ExternalLink, Trophy, Dices, AlertTriangle, Scale,
 } from "lucide-react";
 import {
   useDb, Tournament, TournamentDraft, TemplateData, Root, User, capacity, lateRegOpen,
   saveTournament, deleteTournament, launchTournament, registerSelf, cancelSelf, setSeat,
   setPlayerNumber, seatRandom, seatByRating, saveTemplate, sortedSeatCodes,
+  tableCounts, balanceErrorForSeat,
   fmtDate, fmtNum, fmtDateShort, plural, DAY, uid as genId, can, playSound,
 } from "../lib/db";
 import { Avatar, Badge, Btn, Empty, Field, Modal, Reveal, SectionTitle, Select, StatusBadge, Tabs, Toggle, cn, toast, useHoverDelay } from "../lib/ui";
@@ -459,19 +460,31 @@ export function TournamentSeats({ tid, ro }: { tid: string; ro: boolean }) {
   const [occSeat, setOccSeat] = useState<string | null>(null);
   if (!t) return <Empty title="Турнир не найден" />;
 
-  const regs = Object.entries(t.registeredPlayers).sort((a, b) => (a[1].playerNumber ?? 999) - (b[1].playerNumber ?? 999));
+  const regs = Object.entries(t.registeredPlayers).sort((a, b) => (a[1].playerNumber ?? 99999) - (b[1].playerNumber ?? 99999));
   const seatedUids = new Set(Object.values(t.tables.seats));
   const unseated = regs.filter(([u]) => !seatedUids.has(u));
+  const unseatedReady = unseated.filter(([, r]) => r.playerNumber != null);
+  const noNumCnt = unseated.length - unseatedReady.length;
   const codes = sortedSeatCodes(t);
   const pool = Object.values(s.users).filter((u) => !u.isArchived && !u.isBlocked && !t.registeredPlayers[u.uid]);
   const found = pool.filter((u) => (u.nickname + " " + u.firstName + " " + u.lastName).toLowerCase().includes(q.toLowerCase()));
   const regOpen = lateRegOpen(t);
   const seatedCnt = Object.values(t.registeredPlayers).filter((r) => r.seatCode).length;
+  const counts = tableCounts(t);
+  const minCnt = Math.min(...Object.values(counts));
+  const batchToast = (r: { seated: number; skippedNoNumber: number }) => {
+    if (r.seated === 0 && r.skippedNoNumber > 0) { toast("Рассадить некого: у всех игроков без места нет номера", "err"); return; }
+    toast(`Рассажено: ${r.seated} ${plural(r.seated, "игрок", "игрока", "игроков")}${r.skippedNoNumber ? ` · без номера пропущено: ${r.skippedNoNumber}` : ""}`, r.skippedNoNumber ? "info" : "ok");
+  };
 
   const addPlayer = (u: User) => {
     const err = registerSelf(t.id, u.uid);
     if (err) { toast(err, "err"); return; }
-    toast(`${u.nickname} зарегистрирован`);
+    toast(`${u.nickname} зарегистрирован — присвойте номер, чтобы посадить за стол`);
+  };
+  const setNum = (u: string, raw: string) => {
+    const err = setPlayerNumber(t.id, u, raw ? +raw : null);
+    if (err) { toast(err, "err"); playSound("error"); }
   };
   const trySeat = (code: string) => {
     if (!selUid) return;
@@ -494,8 +507,8 @@ export function TournamentSeats({ tid, ro }: { tid: string; ro: boolean }) {
       <SectionTitle kicker="Регистрация и рассадка" title={`«${t.name}»`}
         right={
           <div className="flex flex-wrap items-center gap-2">
-            <Btn variant="ghost" size="sm" onClick={() => seatRandom(t.id)} disabled={ro || unseated.length === 0}><Dices className="size-4" /> Случайно</Btn>
-            <Btn variant="ghost" size="sm" onClick={() => seatByRating(t.id)} disabled={ro || unseated.length === 0}><SortDesc className="size-4" /> По рейтингу</Btn>
+            <Btn variant="ghost" size="sm" onClick={() => batchToast(seatRandom(t.id))} disabled={ro || unseatedReady.length === 0} title="Рассаживает игроков с номерами, соблюдая баланс столов"><Dices className="size-4" /> Случайно</Btn>
+            <Btn variant="ghost" size="sm" onClick={() => batchToast(seatByRating(t.id))} disabled={ro || unseatedReady.length === 0} title="Соседи по рейтингу — за одним столом, с балансом по заполненности"><SortDesc className="size-4" /> По рейтингу</Btn>
             {t.status === "planned" && <Btn size="sm" onClick={onLaunch} disabled={ro || seatedCnt < 2}><Play className="size-4" /> Запустить</Btn>}
             {t.status === "active" && <Btn size="sm" onClick={() => nav(`/app/pult/${t.id}`)}><Zap className="size-4" /> Пульт</Btn>}
           </div>
@@ -536,11 +549,15 @@ export function TournamentSeats({ tid, ro }: { tid: string; ro: boolean }) {
                     <Avatar user={s.users[u]} size={34} />
                     <button className="min-w-0 flex-1 text-left" onClick={() => setSelUid(selUid === u ? null : u)}>
                       <span className="block truncate text-[13px] font-bold">{s.users[u]?.nickname}</span>
-                      <span className="text-[11px] font-semibold text-dim">{r.seatCode ? `место ${r.seatCode}` : "без места"} · {fmtDateShort(r.registeredAt)}</span>
+                      <span className="text-[11px] font-semibold text-dim">{r.seatCode ? `место ${r.seatCode}` : r.playerNumber == null ? "без места · нет номера" : "без места"} · {fmtDateShort(r.registeredAt)}</span>
                     </button>
-                    <input type="number" placeholder="№" title="Номер участника" className="inp !min-h-[34px] !w-[58px] !rounded-lg !px-2 !py-1 text-center num !text-[13px]"
-                      value={r.playerNumber ?? ""} disabled={ro}
-                      onChange={(e) => setPlayerNumber(t.id, u, e.target.value ? +e.target.value : null)} />
+                    <span className="relative">
+                      <input type="number" min={1} placeholder="№" title={r.playerNumber == null ? "Номер участника — обязателен для посадки за стол" : "Номер участника"}
+                        className={cn("inp !min-h-[34px] !w-[62px] !rounded-lg !px-2 !py-1 text-center num !text-[13px]", r.playerNumber == null && "!border-warn/60 !bg-warn/10")}
+                        value={r.playerNumber ?? ""} disabled={ro}
+                        onChange={(e) => setNum(u, e.target.value)} />
+                      {r.playerNumber == null && <AlertTriangle className="absolute -right-1 -top-1 size-3.5 text-warn" />}
+                    </span>
                     {!ro && <button onClick={() => { cancelSelf(t.id, u); toast("Регистрация отменена", "info"); }} className="text-dim transition hover:text-bad"><X className="size-4" /></button>}
                   </div>
                 ))}
@@ -565,9 +582,24 @@ export function TournamentSeats({ tid, ro }: { tid: string; ro: boolean }) {
                 onDrop={(e) => { e.preventDefault(); const u = e.dataTransfer.getData("uid") || dragUid; if (u && !ro) { setSeat(t.id, u, null); setDragUid(null); toast("Игрок возвращён в пул без места", "info"); } }}>
                 {unseated.map(([u, r]) => (
                   <PlayerChip key={u} uid={u} nick={s.users[u]?.nickname ?? "?"} num={r.playerNumber} seat={null} user={s.users[u]}
+                    warn={r.playerNumber == null}
                     sel={selUid === u} onSelect={() => setSelUid(selUid === u ? null : u)} onDrag={setDragUid} ro={ro} />
                 ))}
                 {unseated.length === 0 && <span className="py-4 text-[12.5px] font-semibold text-dim">Все участники рассажены — можно запускать</span>}
+              </div>
+              {noNumCnt > 0 && (
+                <p className="mt-2.5 flex items-start gap-2 rounded-lg border border-warn/30 bg-warn/10 px-2.5 py-2 text-[11.5px] font-bold text-warn">
+                  <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+                  {noNumCnt} {plural(noNumCnt, "игрок", "игрока", "игроков")} без номера — присвойте номера, иначе посадить за стол нельзя
+                </p>
+              )}
+            </div>
+
+            <div className="panel-deep flex items-start gap-3 p-4">
+              <Scale className="mt-0.5 size-4.5 shrink-0 text-(--acc)" />
+              <div className="space-y-1 text-[11.5px] font-semibold leading-relaxed text-mut">
+                <p><b className="text-ink">Правила рассадки:</b> без номера участника посадить нельзя · номера не повторяются · столы заполняются равномерно — разница не больше 1 игрока.</p>
+                <p className="text-dim">Свободные столы подсвечены зелёным — сажайте сначала в них.</p>
               </div>
             </div>
 
@@ -575,14 +607,20 @@ export function TournamentSeats({ tid, ro }: { tid: string; ro: boolean }) {
               const tb = ti + 1;
               const tCodes = codes.filter((c) => c.startsWith(`C${tb}-`));
               const occCnt = tCodes.filter((c) => t.tables.seats[c]).length;
+              const isMin = counts[`C${tb}`] === minCnt;
               return (
-                <div key={tb} className="panel overflow-hidden">
+                <div key={tb} className={cn("panel overflow-hidden transition-shadow duration-300", isMin && "ring-1 ring-(--acc-line)/50")}>
                   <div className="felt stitched flex items-center justify-between px-4 py-3 sm:px-5">
                     <span className="flex items-center gap-2.5">
                       <span className="grid size-8 place-items-center rounded-full bg-black/30 ring-1 ring-white/20">
                         <LayoutGrid className="size-4 text-[#ffd76a]" />
                       </span>
                       <span className="font-display text-[14px] font-extrabold tracking-wide text-white">Стол {tb}</span>
+                      {isMin && (
+                        <span className="rounded-full bg-[#ffd76a]/20 px-2 py-0.5 text-[9.5px] font-extrabold uppercase tracking-wider text-[#ffd76a] ring-1 ring-[#ffd76a]/40">
+                          свободнее всех
+                        </span>
+                      )}
                     </span>
                     <span className="num rounded-full bg-black/35 px-3 py-1 text-[12px] font-extrabold text-white/85 ring-1 ring-white/15">
                       {occCnt} / {t.tables.seatsPerTable} занято
@@ -593,6 +631,7 @@ export function TournamentSeats({ tid, ro }: { tid: string; ro: boolean }) {
                       {tCodes.map((code) => {
                         const occ = t.tables.seats[code];
                         const occReg = occ ? t.registeredPlayers[occ] : null;
+                        const offBalance = !occ && !isMin; // место за перегруженным столом — вне баланса
                         return (
                           <div key={code}
                             onDragOver={(e) => e.preventDefault()}
@@ -601,11 +640,16 @@ export function TournamentSeats({ tid, ro }: { tid: string; ro: boolean }) {
                               if (ro) return;
                               if (occ) { setOccSeat(code); setSelUid(null); }
                               else if (selUid) trySeat(code);
-                              else { setPickQ(""); setPickSeat(code); }
+                              else {
+                                const be = balanceErrorForSeat(t, code);
+                                if (be) { toast(be, "err"); return; }
+                                setPickQ(""); setPickSeat(code);
+                              }
                             }}
                             className={cn("group/seat relative min-h-[86px] cursor-pointer rounded-xl border transition-all duration-200",
                               occ ? "border-line bg-white/[0.05] hover:border-warn/50 hover:bg-warn/10" : "border-dashed border-line bg-white/[0.02] hover:border-(--acc-line) hover:bg-(--acc-soft)",
-                              selUid && !occ && "border-(--acc-line) bg-(--acc-soft) pulse-live")}>
+                              selUid && !occ && (isMin ? "border-(--acc-line) bg-(--acc-soft) pulse-live" : "opacity-40 saturate-50"),
+                              offBalance && !selUid && "opacity-55")}>
                             <span className={cn("num absolute left-2 top-1.5 rounded-md px-1.5 py-0.5 text-[10px] font-extrabold", occ ? "bg-(--acc-soft) text-(--acc)" : "bg-white/[0.05] text-dim")}>{code}</span>
                             {occ ? (
                               <div className="flex h-full flex-col items-center justify-center gap-1.5 p-2 pt-6">
@@ -640,7 +684,7 @@ export function TournamentSeats({ tid, ro }: { tid: string; ro: boolean }) {
           <input className="inp pl-9" autoFocus placeholder="Поиск среди зарегистрированных без места…" value={pickQ} onChange={(e) => setPickQ(e.target.value)} />
         </div>
         <div className="max-h-[320px] space-y-1.5 overflow-y-auto pr-1">
-          {unseated
+          {unseatedReady
             .filter(([u]) => ((s.users[u]?.nickname ?? "") + " " + (s.users[u]?.firstName ?? "")).toLowerCase().includes(pickQ.toLowerCase()))
             .map(([u, r]) => (
               <button key={u} onClick={() => {
@@ -653,13 +697,22 @@ export function TournamentSeats({ tid, ro }: { tid: string; ro: boolean }) {
                 <Avatar user={s.users[u]} size={34} />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[13.5px] font-bold">{s.users[u]?.nickname}</span>
-                  <span className="text-[11.5px] font-semibold text-dim">№ {r.playerNumber ?? "—"} · {s.users[u]?.firstName} {s.users[u]?.lastName}</span>
+                  <span className="text-[11.5px] font-semibold text-dim">№ {r.playerNumber} · {s.users[u]?.firstName} {s.users[u]?.lastName}</span>
                 </span>
                 <span className="num rounded-lg bg-(--acc-soft) px-2.5 py-1 text-[12px] font-extrabold text-(--acc)">{pickSeat}</span>
               </button>
             ))}
-          {unseated.length === 0 && <p className="py-6 text-center text-[13px] font-semibold text-dim">Нет участников без места — зарегистрируйте игроков слева</p>}
+          {unseatedReady.filter(([u]) => ((s.users[u]?.nickname ?? "") + " " + (s.users[u]?.firstName ?? "")).toLowerCase().includes(pickQ.toLowerCase())).length === 0 && (
+            <p className="py-6 text-center text-[13px] font-semibold text-dim">
+              {noNumCnt > 0 && unseated.length > 0 ? "Все игроки без места пока без номера — присвойте номера в списке слева" : "Нет участников без места — зарегистрируйте игроков слева"}
+            </p>
+          )}
         </div>
+        {noNumCnt > 0 && (
+          <p className="mt-3 flex items-center gap-2 rounded-lg border border-warn/30 bg-warn/10 px-3 py-2 text-[11.5px] font-bold text-warn">
+            <AlertTriangle className="size-3.5 shrink-0" /> Скрыто игроков без номера: {noNumCnt} — им нельзя присвоить место
+          </p>
+        )}
       </Modal>
 
       {/* действия с занятым местом */}
@@ -693,9 +746,9 @@ export function TournamentSeats({ tid, ro }: { tid: string; ro: boolean }) {
   );
 }
 
-function PlayerChip({ uid, nick, num, seat, user, sel, onSelect, onDrag, ro, compact }: {
+function PlayerChip({ uid, nick, num, seat, user, sel, onSelect, onDrag, ro, compact, warn }: {
   uid: string; nick: string; num: number | null; seat: string | null; user: User | undefined;
-  sel: boolean; onSelect: () => void; onDrag: (u: string | null) => void; ro: boolean; compact?: boolean;
+  sel: boolean; onSelect: () => void; onDrag: (u: string | null) => void; ro: boolean; compact?: boolean; warn?: boolean;
 }) {
   const hov = useHoverDelay(250);
   return (
@@ -706,14 +759,17 @@ function PlayerChip({ uid, nick, num, seat, user, sel, onSelect, onDrag, ro, com
       onClick={(e) => { e.stopPropagation(); onSelect(); }}
       {...hov.bind}
       className={cn("relative inline-flex cursor-grab select-none items-center gap-2 rounded-xl border px-2.5 py-1.5 transition-all duration-200 active:cursor-grabbing",
-        sel ? "border-(--acc-line) bg-(--acc-soft) shadow-[0_6px_20px_-8px_var(--acc)]" : "border-line bg-white/[0.05] hover:border-(--acc-line)/70 hover:bg-white/[0.09]",
+        warn && !sel
+          ? "border-dashed border-warn/55 bg-warn/10 hover:bg-warn/15"
+          : sel ? "border-(--acc-line) bg-(--acc-soft) shadow-[0_6px_20px_-8px_var(--acc)]" : "border-line bg-white/[0.05] hover:border-(--acc-line)/70 hover:bg-white/[0.09]",
         compact && "w-full justify-center border-0 bg-transparent px-1 py-0.5 hover:bg-white/[0.06]")}>
       <Avatar user={user} size={compact ? 30 : 28} />
       <span className={cn("max-w-[110px] truncate font-bold", compact ? "text-[11.5px]" : "text-[12.5px]")}>{nick}</span>
       {num != null && <span className="num rounded-md bg-(--acc-soft) px-1.5 py-0.5 text-[10.5px] font-extrabold text-(--acc)">#{num}</span>}
+      {warn && !compact && <AlertTriangle className="size-3.5 shrink-0 text-warn" />}
       {hov.on && (
         <span className="panel-deep absolute -top-9 left-1/2 z-30 -translate-x-1/2 whitespace-nowrap rounded-lg px-2.5 py-1 text-[11px] font-extrabold text-ink anim-pop">
-          {num ?? "—"} · {seat ?? "без места"}
+          {warn ? "нет номера — посадка запрещена" : `${num ?? "—"} · ${seat ?? "без места"}`}
         </span>
       )}
     </span>

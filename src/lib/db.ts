@@ -702,12 +702,122 @@ export function cancelSelf(tid: string, targetUid: string) {
     notifyUser(s, targetUid, "Регистрация отменена", `Вы отменили запись на «${t.name}».`, "tournament");
   });
 }
-export function setPlayerNumber(tid: string, targetUid: string, num: number | null) {
+export function setPlayerNumber(tid: string, targetUid: string, num: number | null): string | null {
+  const t = db.get().tournaments[tid];
+  if (num != null) {
+    const n = Math.max(1, Math.floor(num));
+    const dup = Object.entries(t.registeredPlayers).find(([u, r]) => u !== targetUid && r.playerNumber === n);
+    if (dup) return `Номер ${n} уже занят — у игрока ${db.get().users[dup[0]]?.nickname ?? "другого участника"}. Номера не могут повторяться.`;
+    num = n;
+  }
   db.mutate((s) => { s.tournaments[tid].registeredPlayers[targetUid].playerNumber = num; });
+  return null;
+}
+
+/* ---- правила рассадки: номера обязательны, номера уникальны, столы сбалансированы ---- */
+export function tableCounts(t: Tournament): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (let i = 1; i <= t.tables.totalTables; i++) counts[`C${i}`] = 0;
+  sortedSeatCodes(t).forEach((c) => { if (t.tables.seats[c]) counts[c.split("-")[0]] = (counts[c.split("-")[0]] ?? 0) + 1; });
+  return counts;
+}
+const tableName = (tb: string) => `стол ${tb.replace("C", "")}`;
+/** Можно ли добавить игрока за стол места `code`, не нарушив баланс (разница между столами ≤ 1). */
+export function balanceErrorForSeat(t: Tournament, code: string): string | null {
+  const counts = tableCounts(t);
+  const to = code.split("-")[0];
+  const min = Math.min(...Object.values(counts));
+  if ((counts[to] ?? 0) > min) {
+    const emptiest = Object.entries(counts).filter(([, c]) => c === min).map(([tb]) => tableName(tb)).join(" / ");
+    return `Баланс столов: за ${tableName(to)} уже ${counts[to]} ${plural(counts[to], "игрок", "игрока", "игроков")}, минимум — ${min}. Сажайте за ${emptiest}.`;
+  }
+  return null;
+}
+export interface SeatBatchResult { seated: number; skippedNoNumber: number }
+export function seatRandom(tid: string): SeatBatchResult {
+  const t0 = db.get().tournaments[tid];
+  const eligible = Object.entries(t0.registeredPlayers).filter(([, r]) => !r.seatCode && r.playerNumber != null);
+  const skipped = Object.values(t0.registeredPlayers).filter((r) => !r.seatCode && r.playerNumber == null).length;
+  const res: SeatBatchResult = { seated: 0, skippedNoNumber: skipped };
+  if (!eligible.length) return res;
+  db.mutate((s) => {
+    const t = s.tournaments[tid];
+    const counts = tableCounts(t);
+    const empties: Record<string, string[]> = {};
+    sortedSeatCodes(t).forEach((c) => { if (!t.tables.seats[c]) (empties[c.split("-")[0]] ??= []).push(c); });
+    for (let i = eligible.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [eligible[i], eligible[j]] = [eligible[j], eligible[i]]; }
+    Object.values(empties).forEach((arr) => { for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; } });
+    eligible.forEach(([u]) => {
+      const avail = Object.keys(empties).filter((tb) => empties[tb].length > 0);
+      if (!avail.length) return;
+      const min = Math.min(...avail.map((tb) => counts[tb]));
+      const cands = avail.filter((tb) => counts[tb] === min);
+      const tb = cands[Math.floor(Math.random() * cands.length)];
+      const code = empties[tb].pop()!;
+      t.registeredPlayers[u].seatCode = code;
+      t.tables.seats[code] = u;
+      counts[tb]++; res.seated++;
+    });
+  });
+  if (res.seated) playSound("register");
+  return res;
+}
+export function seatByRating(tid: string): SeatBatchResult {
+  const s0 = db.get();
+  const t0 = s0.tournaments[tid];
+  const eligible = Object.entries(t0.registeredPlayers)
+    .filter(([, r]) => !r.seatCode && r.playerNumber != null)
+    .sort((a, b) => (s0.users[b[0]]?.stats.points ?? 0) - (s0.users[a[0]]?.stats.points ?? 0));
+  const skipped = Object.values(t0.registeredPlayers).filter((r) => !r.seatCode && r.playerNumber == null).length;
+  const res: SeatBatchResult = { seated: 0, skippedNoNumber: skipped };
+  if (!eligible.length) return res;
+  db.mutate((s) => {
+    const t = s.tournaments[tid];
+    const counts = tableCounts(t);
+    const empties: Record<string, string[]> = {};
+    sortedSeatCodes(t).forEach((c) => { if (!t.tables.seats[c]) (empties[c.split("-")[0]] ??= []).push(c); });
+    const avg: Record<string, { sum: number; n: number }> = {};
+    Object.keys(counts).forEach((tb) => (avg[tb] = { sum: 0, n: 0 }));
+    sortedSeatCodes(t).forEach((c) => {
+      const u = t.tables.seats[c]; if (!u) return;
+      const tb = c.split("-")[0];
+      avg[tb].sum += s.users[u]?.stats.points ?? 0; avg[tb].n++;
+    });
+    eligible.forEach(([u]) => {
+      const avail = Object.keys(empties).filter((tb) => empties[tb].length > 0);
+      if (!avail.length) return;
+      const min = Math.min(...avail.map((tb) => counts[tb]));
+      const cands = avail.filter((tb) => counts[tb] === min);
+      const pts = s.users[u]?.stats.points ?? 0;
+      let best = cands[0]; let bestD = Infinity;
+      cands.forEach((tb) => {
+        const a = avg[tb];
+        const d = a.n ? Math.abs(a.sum / a.n - pts) : Number.MAX_SAFE_INTEGER; // пустой стол — нейтрален
+        if (d < bestD - 1e-9 || (Math.abs(d - bestD) < 1e-9 && Math.random() < 0.5)) { bestD = d; best = tb; }
+      });
+      const code = empties[best].pop()!;
+      t.registeredPlayers[u].seatCode = code;
+      t.tables.seats[code] = u;
+      counts[best]++; avg[best].sum += pts; avg[best].n++; res.seated++;
+    });
+  });
+  if (res.seated) playSound("register");
+  return res;
 }
 export function setSeat(tid: string, targetUid: string, code: string | null): string | null {
   const t = db.get().tournaments[tid];
+  const reg = t.registeredPlayers[targetUid];
+  if (!reg) return "Игрок не зарегистрирован в турнире";
   if (code && t.tables.seats[code] && t.tables.seats[code] !== targetUid) return "Место уже занято";
+  if (code) {
+    if (reg.playerNumber == null) return "Игрок без номера не может быть посажен за стол — сначала присвойте номер участника";
+    const from = reg.seatCode?.split("-")[0];
+    const to = code.split("-")[0];
+    if (from !== to) { // пересадка в пределах стола баланс не меняет
+      const be = balanceErrorForSeat(t, code);
+      if (be) return be;
+    }
+  }
   db.mutate((s) => {
     const tt = s.tournaments[tid]; const r = tt.registeredPlayers[targetUid]; if (!r) return;
     if (r.seatCode) delete tt.tables.seats[r.seatCode];
@@ -717,35 +827,6 @@ export function setSeat(tid: string, targetUid: string, code: string | null): st
   playSound("click");
   return null;
 }
-export function seatRandom(tid: string) {
-  db.mutate((s) => {
-    const t = s.tournaments[tid];
-    const empty = sortedSeatCodes(t).filter((c) => !t.tables.seats[c]);
-    const unseated = Object.entries(t.registeredPlayers).filter(([, r]) => !r.seatCode);
-    for (let i = empty.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [empty[i], empty[j]] = [empty[j], empty[i]]; }
-    unseated.forEach(([u, r], i) => { if (empty[i]) { r.seatCode = empty[i]; t.tables.seats[empty[i]] = u; } });
-  });
-  playSound("register");
-}
-export function seatByRating(tid: string) {
-  db.mutate((s) => {
-    const t = s.tournaments[tid];
-    const unseated = Object.entries(t.registeredPlayers).filter(([, r]) => !r.seatCode)
-      .sort((a, b) => (s.users[b[0]]?.stats.points ?? 0) - (s.users[a[0]]?.stats.points ?? 0));
-    const all = sortedSeatCodes(t);
-    const byTable: Record<string, string[]> = {};
-    all.forEach((c) => { const tb = c.split("-")[0]; (byTable[tb] ??= []).push(c); });
-    const ordered: string[] = [];
-    Object.keys(byTable).sort().forEach((tb, i) => {
-      const seats = byTable[tb]; if (i % 2 === 1) seats.reverse();
-      ordered.push(...seats);
-    });
-    const empty = ordered.filter((c) => !t.tables.seats[c]);
-    unseated.forEach(([u, r], i) => { if (empty[i]) { r.seatCode = empty[i]; t.tables.seats[empty[i]] = u; } });
-  });
-  playSound("register");
-}
-
 /* ============================== ACTIONS: PULT ============================== */
 function advanceLevel(t: Tournament) {
   const p = t.pult, lvs = t.structure.levels;
