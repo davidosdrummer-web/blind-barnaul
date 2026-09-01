@@ -11,7 +11,7 @@ import {
 } from "../lib/db";
 import { Avatar, Badge, Btn, Empty, Modal, Reveal, Select, cn, toast } from "../lib/ui";
 
-const RETURN_LABELS: Record<ReturnMethod, string> = { rebuy: "Рибай", reentry: "Ре-энтри", addon: "Адд-он", last_chance: "Ласт Шанс" };
+const RETURN_LABELS: Record<ReturnMethod, string> = { rebuy: "Ребай", reentry: "Ре-энтри", addon: "Адд-он", last_chance: "Ласт Шанс" };
 
 export default function Pult({ preselect }: { preselect?: string }) {
   const s = useDb();
