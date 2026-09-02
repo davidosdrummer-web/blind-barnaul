@@ -53,6 +53,15 @@ export interface Tournament {
   };
   results?: { ranking: string[]; pointsAwarded: Record<string, number>; completedAt: number; winner: string };
 }
+export interface TournamentDraft {
+  name: string; seasonId: string; startDate: number; startTime: string;
+  registrationDuration: number; startingStack: number; finalTablePlayers: number;
+  description: string; pointsForKnockout: boolean; knockoutPoints: number;
+  rebuyChips: number; reentryChips: number; addonChips: number;
+  structure: { levels: Level[]; breaks: Break[] };
+  bonuses: Bonus[]; pointsTable: Record<string, number>;
+  tables: { totalTables: number; seatsPerTable: number };
+}
 export interface TemplateData {
   startingStack: number; finalTablePlayers: number; pointsForKnockout: boolean;
   knockoutPoints: number; rebuyChips: number; reentryChips: number; addonChips: number;

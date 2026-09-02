@@ -565,7 +565,7 @@ export async function returnPlayer(tid: string, targetUid: string, method: "rebu
     addon: method === "addon" ? (t.registeredPlayers[targetUid]?.addon || 0) + 1 : (t.registeredPlayers[targetUid]?.addon || 0),
     reentry: method === "reentry" ? (t.registeredPlayers[targetUid]?.reentry || 0) + 1 : (t.registeredPlayers[targetUid]?.reentry || 0),
   });
-  await update(ref(db, `tournaments/${tid}/pult/eliminated/${targetUid}/returnMethod`), method);
+  await set(ref(db, `tournaments/${tid}/pult/eliminated/${targetUid}/returnMethod`), method);
   await update(ref(db, `tournaments/${tid}/pult`), {
     returns: (t.pult.returns || 0) + 1,
   });
@@ -580,7 +580,7 @@ export async function giveBonus(tid: string, bonusId: string, targetUid: string)
   const b = t.bonuses.find(x => x.id === bonusId);
   if (!b) return "Бонус не найден";
   if (!t.registeredPlayers[targetUid] || t.registeredPlayers[targetUid].isEliminated) return "Игрок не в игре";
-  await update(ref(db, `tournaments/${tid}/registeredPlayers/${targetUid}/chips`), (t.registeredPlayers[targetUid].chips || 0) + b.chips);
+  await set(ref(db, `tournaments/${tid}/registeredPlayers/${targetUid}/chips`), (t.registeredPlayers[targetUid].chips || 0) + b.chips);
   await update(ref(db, `tournaments/${tid}/pult`), {
     bonusesGiven: (t.pult.bonusesGiven || 0) + 1,
   });
@@ -594,7 +594,7 @@ export async function withdrawChips(tid: string, amount: number): Promise<string
   if (!amount || amount <= 0) return "Введите сумму больше нуля";
   const bank = chipsInPlay(t) - (t.withdrawn || 0);
   if (amount > bank) return "Сумма превышает фишки в игре";
-  await update(ref(db, `tournaments/${tid}/withdrawn`), (t.withdrawn || 0) + amount);
+  await set(ref(db, `tournaments/${tid}/withdrawn`), (t.withdrawn || 0) + amount);
   await broadcast("Вывод фишек", `«${t.name}»: из банка выведено ${fmtNum(amount)} фишек.`);
   return null;
 }
