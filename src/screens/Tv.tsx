@@ -1,0 +1,359 @@
+import { ReactNode, useEffect, useMemo, useState } from "react";
+import { useParams } from "react-router-dom";
+import { Maximize, Minimize, Timer, Coins, Users, Skull, Crown, Coffee } from "lucide-react";
+import {
+  useFirebaseData
+} from "../lib/useFirebaseData";
+import {
+  fmtClock, fmtNum, levelInfo, nextLevelOf, chipsInPlay,
+  fmtDate, plural, computeSeasonRating,
+} from "../lib/db";
+import { Avatar, Confetti, Marquee, Suit, cn } from "../lib/ui";
+
+function useFullscreen() {
+  const [fs, setFs] = useState(false);
+  useEffect(() => {
+    const h = () => setFs(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", h);
+    return () => document.removeEventListener("fullscreenchange", h);
+  }, []);
+  return {
+    fs,
+    toggle: () => {
+      if (document.fullscreenElement) void document.exitFullscreen();
+      else void document.documentElement.requestFullscreen();
+    },
+  };
+}
+
+function TvFrame({ children, right }: { children: ReactNode; right?: ReactNode }) {
+  const { club } = useFirebaseData();
+  const { fs, toggle } = useFullscreen();
+  const [nowT, setNowT] = useState(new Date());
+  useEffect(() => { const i = setInterval(() => setNowT(new Date()), 1000); return () => clearInterval(i); }, []);
+  
+  return (
+    <div className="relative flex min-h-screen flex-col overflow-hidden">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(70%_50%_at_50%_-5%,var(--acc-soft),transparent_60%)]" />
+      <header className="relative z-10 flex items-center gap-4 px-6 py-5 lg:px-10">
+        <span className="grid size-12 place-items-center rounded-2xl bg-(--acc-soft) ring-1 ring-(--acc-line)">
+          <Suit s="spade" className="size-6 text-(--acc)" />
+        </span>
+        <div>
+          <p className="font-display text-[17px] font-extrabold tracking-wide lg:text-[20px]">{club?.name || "Клуб"}</p>
+          <p className="text-[11px] font-bold uppercase tracking-[0.26em] text-dim">клуб спортивного покера</p>
+        </div>
+        <div className="ml-auto flex items-center gap-4">
+          {right}
+          <span className="num hidden text-[22px] font-bold text-mut sm:block">
+            {nowT.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}
+          </span>
+          <button onClick={toggle} className="grid size-11 place-items-center rounded-xl border border-line bg-white/[0.04] text-mut transition hover:text-(--acc) hover:border-(--acc-line)">
+            {fs ? <Minimize className="size-5" /> : <Maximize className="size-5" />}
+          </button>
+        </div>
+      </header>
+      <main className="relative z-10 flex-1 px-6 pb-4 lg:px-10">{children}</main>
+      <footer className="relative z-10 border-t border-line bg-black/30 py-3.5 backdrop-blur-sm">
+        <div className="text-[15px] font-bold tracking-wide text-mut">
+          <Marquee text={club?.slogan || "Клуб спортивного покера"} speed={30} />
+        </div>
+      </footer>
+    </div>
+  );
+}
+
+function useTournament(screenKey?: "main" | "final" | "results") {
+  const { tournaments, screens } = useFirebaseData();
+  const { tid } = useParams();
+  const cfgId = screenKey ? screens[screenKey]?.tournamentId : undefined;
+  const all = Object.values(tournaments);
+  
+  const t = tournaments[tid ?? ""]
+    ?? (cfgId ? tournaments[cfgId] : undefined)
+    ?? all.find((x) => x.status === "active")
+    ?? all.find((x) => x.status === "completed" && x.results)
+    ?? all[0];
+  return { tournaments, t };
+}
+
+/* ================================ MAIN SCREEN ================================ */
+export function TvMain() {
+  const { t } = useTournament("main");
+  if (!t) return <TvFrame><p className="grid h-full place-items-center font-display text-2xl text-mut">Нет турниров</p></TvFrame>;
+  
+  const info = levelInfo(t);
+  const next = nextLevelOf(t);
+  const running = t.pult.timerStarted && !t.pult.timerPaused;
+  const left = Object.values(t.registeredPlayers).filter((r) => !r.isEliminated).length;
+  const afterBreak = t.structure.breaks.find((b) => b.afterLevel === t.pult.currentLevel) ?? null;
+  const dispLv = t.pult.currentBreak ? (next ?? info.lv) : info.lv;
+  const dur = (t.pult.currentBreak ? (afterBreak?.duration ?? 10) : info.lv.duration) * 60;
+
+  return (
+    <TvFrame right={<span className="flex items-center gap-2 rounded-full bg-ok/15 px-4 py-1.5 text-[13px] font-extrabold uppercase tracking-widest text-ok"><span className="relative size-2 rounded-full bg-ok live-dot" />Live</span>}>
+      <div className="mx-auto flex h-full max-w-[1500px] flex-col justify-center gap-6 py-4">
+        <div className="text-center">
+          <p className="text-[13px] font-extrabold uppercase tracking-[0.34em] text-(--acc)">Турнир клуба</p>
+          <h1 className="mt-2 font-display text-[clamp(28px,4.5vw,60px)] font-extrabold leading-tight">«{t.name}»</h1>
+        </div>
+        <div className="grid items-stretch gap-6 lg:grid-cols-[1.35fr_1fr]">
+          {/* timer */}
+          <div className="panel relative flex flex-col justify-center overflow-hidden p-7 text-center lg:p-9">
+            <div className="absolute inset-x-0 top-0 h-[3px] bg-(--acc-soft)">
+              <div className="h-full bg-(--acc) transition-all duration-1000 ease-linear" style={{ width: `${(t.pult.timeRemaining / dur) * 100}%` }} />
+            </div>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <span key={String(t.pult.currentBreak) + info.idx}
+                className={cn("anim-pop rounded-full px-4 py-1.5 text-[13px] font-extrabold uppercase tracking-[0.22em]",
+                  t.pult.currentBreak ? "bg-[#ffd76a]/15 text-[#ffd76a] ring-1 ring-[#ffd76a]/40" : "bg-(--acc-soft) text-(--acc) ring-1 ring-(--acc-line)/50")}>
+                {t.pult.currentBreak ? "Перерыв" : `Уровень ${info.idx} из ${info.total}`}
+              </span>
+              {afterBreak && !t.pult.currentBreak && (
+                <span className="anim-pop flex items-center gap-1.5 rounded-full bg-[#ffd76a]/12 px-4 py-1.5 text-[12.5px] font-extrabold uppercase tracking-[0.18em] text-[#ffd76a] ring-1 ring-[#ffd76a]/35">
+                  <Coffee className="size-4" /> после уровня — перерыв {afterBreak.duration} мин
+                </span>
+              )}
+              {next && !t.pult.currentBreak && (
+                <span className="rounded-full bg-white/[0.04] px-4 py-1.5 text-[12.5px] font-bold uppercase tracking-[0.16em] text-mut ring-1 ring-line">
+                  далее: <b className="num text-ink">{fmtNum(next.sb)}/{fmtNum(next.bb)}</b>{next.ante ? <> · анте <b className="num text-ink">{fmtNum(next.ante)}</b></> : null} · {next.duration} мин
+                </span>
+              )}
+              {t.pult.currentBreak && next && (
+                <span className="rounded-full bg-white/[0.04] px-4 py-1.5 text-[12.5px] font-bold uppercase tracking-[0.16em] text-mut ring-1 ring-line">
+                  возобновимся на уровне <b className="num text-ink">{next.level}</b>
+                </span>
+              )}
+            </div>
+            <p key={info.idx + String(t.pult.currentBreak)} className={cn("num anim-pop mx-auto mt-4 font-display font-extrabold leading-none", running && t.pult.timeRemaining <= 30 ? "text-bad blink" : "text-ink")}
+              style={{ fontSize: "clamp(78px, 10vw, 164px)" }}>
+              {fmtClock(t.pult.timeRemaining)}
+            </p>
+            <div key={"bl" + dispLv.level + String(t.pult.currentBreak)} className="anim-pop mx-auto mt-5 grid w-fit grid-cols-3 items-stretch gap-2.5 sm:gap-4">
+              {[
+                { l: "МБ", v: fmtNum(dispLv.sb) },
+                { l: "ББ", v: fmtNum(dispLv.bb) },
+                { l: "Анте", v: dispLv.ante ? fmtNum(dispLv.ante) : "—" },
+              ].map((x) => (
+                <div key={x.l} className="min-w-[92px] rounded-2xl border border-(--acc-line)/50 bg-(--acc-soft) px-5 py-3.5 backdrop-blur-sm">
+                  <p className="text-[11px] font-extrabold uppercase tracking-[0.24em] text-mut">{x.l}</p>
+                  <p className="num mt-1 font-display text-[clamp(28px,3.4vw,52px)] font-extrabold leading-none text-(--acc)">{x.v}</p>
+                </div>
+              ))}
+            </div>
+            <p className="mt-3 text-[12.5px] font-extrabold uppercase tracking-[0.26em] text-dim">
+              {t.pult.currentBreak
+                ? (next ? `блайнды уровня ${next.level} — после перерыва` : "финальный уровень")
+                : `блайнды уровня ${info.idx}`}
+            </p>
+          </div>
+          {/* live metrics — 2×2 */}
+          <div className="flex h-full flex-col gap-3.5">
+            <div className="grid flex-1 grid-cols-2 grid-rows-2 gap-3.5">
+              {([
+                { icon: <Coins className="size-5.5" />, l: "Фишек в игре", v: fmtNum(chipsInPlay(t)), suit: "spade" as const },
+                { icon: <Users className="size-5.5" />, l: "В игре", v: `${left} / ${Object.keys(t.registeredPlayers).length}`, suit: "heart" as const },
+                { icon: <Timer className="size-5.5" />, l: "Средний стек", v: fmtNum(left ? Math.round(chipsInPlay(t) / left) : 0), suit: "diamond" as const },
+                { icon: <Skull className="size-5.5" />, l: "Нокаутов", v: String(t.pult.knockouts), suit: "club" as const },
+              ]).map((x, i) => (
+                <div key={x.l}
+                  className="anim-in panel-deep group relative flex flex-col justify-between overflow-hidden p-4 transition-all duration-300 hover:-translate-y-1 hover:border-(--acc-line)/70 lg:p-5"
+                  style={{ animationDelay: `${0.15 + i * 0.12}s` }}>
+                  <Suit s={x.suit} className="pointer-events-none absolute -bottom-4 -right-3 size-20 text-white/[0.04] transition-transform duration-500 group-hover:rotate-12 group-hover:text-white/[0.07]" />
+                  <span className="relative grid size-10 place-items-center rounded-xl bg-(--acc-soft) text-(--acc) ring-1 ring-(--acc-line)/40 transition-transform duration-300 group-hover:scale-110">{x.icon}</span>
+                  <div className="relative">
+                    <p key={x.v} className="num anim-pop text-[clamp(22px,2.6vw,38px)] font-extrabold leading-none">{x.v}</p>
+                    <p className="mt-1.5 text-[10.5px] font-extrabold uppercase tracking-[0.18em] text-dim">{x.l}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <p className="text-center text-[13px] font-bold text-dim">старт: {fmtDate(t.startDate)} · поздняя регистрация {t.registrationDuration} мин · стартовый стек {fmtNum(t.startingStack)}</p>
+          </div>
+        </div>
+      </div>
+    </TvFrame>
+  );
+}
+
+/* ================================ FINAL TABLE ================================ */
+const SEAT_POS = [
+  { x: 50, y: 93 }, { x: 24, y: 85 }, { x: 76, y: 85 },
+  { x: 6, y: 62 }, { x: 94, y: 62 }, { x: 6, y: 26 }, { x: 94, y: 26 },
+  { x: 30, y: 5 }, { x: 70, y: 5 },
+];
+
+export function TvFinal() {
+  const { tournaments, users } = useFirebaseData();
+  const { t } = useTournament("final");
+  if (!t) return <TvFrame><p className="grid h-full place-items-center font-display text-2xl text-mut">Нет турниров</p></TvFrame>;
+  
+  const regs = Object.entries(t.registeredPlayers).filter(([, r]) => !r.isEliminated).sort((a, b) => b[1].chips - a[1].chips);
+  const totalLeft = regs.length;
+  const isFinal = totalLeft <= t.finalTablePlayers;
+  const shown = regs.slice(0, 9);
+  const chipLeader = shown[0]?.[0];
+
+  return (
+    <TvFrame right={<span className="rounded-full bg-[#ffd76a]/15 px-4 py-1.5 text-[13px] font-extrabold uppercase tracking-widest text-[#ffd76a]">Финальный стол</span>}>
+      <div className="flex h-full flex-col justify-center py-2">
+        <h1 className="text-center font-display text-[clamp(22px,3.2vw,42px)] font-extrabold">«{t.name}»</h1>
+        <p className="mt-1 text-center text-[14px] font-bold uppercase tracking-[0.3em] text-dim">
+          {isFinal ? `топ-${t.finalTablePlayers} · битва за титул` : `в игре ${totalLeft} — до финального стола осталось ${totalLeft - t.finalTablePlayers} ${plural(totalLeft - t.finalTablePlayers, "игрок", "игрока", "игроков")}`}
+        </p>
+        <div className="relative mx-auto mt-4 w-full max-w-[1200px]" style={{ aspectRatio: "16/8.4" }}>
+          <div className="felt stitched absolute left-[13%] right-[13%] top-[16%] bottom-[16%] rounded-[50%]">
+            <div className="absolute inset-0 grid place-items-center">
+              <div className="text-center">
+                <Suit s="spade" className="mx-auto size-10 text-white/25" />
+                <p className="num mt-2 text-[clamp(15px,1.6vw,24px)] font-extrabold text-white/80">{fmtNum(chipsInPlay(t))} фишек</p>
+                <p className="text-[11px] font-extrabold uppercase tracking-[0.24em] text-white/40">в банке турнира</p>
+              </div>
+            </div>
+          </div>
+          {SEAT_POS.map((pos, i) => {
+            const entry = shown[i];
+            const u = entry ? users[entry[0]] : null;
+            const reg = entry ? entry[1] : null;
+            return (
+              <div key={i} className="absolute -translate-x-1/2 -translate-y-1/2 text-center transition-all duration-700" style={{ left: `${pos.x}%`, top: `${pos.y}%` }}>
+                {u && reg ? (
+                  <div key={entry![0]} className="anim-pop">
+                    <div className="relative mx-auto w-fit">
+                      <Avatar user={u} size={76} ring />
+                      {entry![0] === chipLeader && (
+                        <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-[#ffd76a] px-2 py-0.5 text-[9.5px] font-extrabold uppercase tracking-wider text-black shadow-lg">лидер</span>
+                      )}
+                    </div>
+                    <p className="mt-2.5 max-w-[150px] truncate font-display text-[clamp(12px,1.25vw,17px)] font-bold">{u.nickname}</p>
+                    <p className="text-[10.5px] font-bold uppercase tracking-wider text-dim">{reg.seatCode ?? ""}</p>
+                  </div>
+                ) : (
+                  <div className="grid size-[76px] place-items-center rounded-full border border-dashed border-line text-dim">
+                    <span className="text-[10px] font-extrabold uppercase">место {i + 1}</span>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </TvFrame>
+  );
+}
+
+/* ================================ RESULTS ================================ */
+export function TvResults() {
+  const { tournaments, users } = useFirebaseData();
+  const { t } = useTournament("results");
+  if (!t || !t.results) return <TvFrame><p className="grid h-full place-items-center font-display text-2xl text-mut">Итоги появятся после завершения турнира</p></TvFrame>;
+  
+  const winner = users[t.results.winner];
+  const top = t.results.ranking.slice(0, 10);
+
+  return (
+    <TvFrame right={<span className="rounded-full bg-(--acc-soft) px-4 py-1.5 text-[13px] font-extrabold uppercase tracking-widest text-(--acc)">Итоги турнира</span>}>
+      <Confetti count={54} />
+      <div className="mx-auto grid h-full max-w-[1400px] items-center gap-8 py-4 lg:grid-cols-[1fr_1.1fr]">
+        <div className="text-center">
+          <Crown className="mx-auto size-14 text-[#ffd76a] drop-shadow-[0_0_28px_rgba(255,215,106,0.55)]" />
+          <p className="mt-3 text-[13px] font-extrabold uppercase tracking-[0.34em] text-[#ffd76a]">Победитель турнира</p>
+          <h1 className="mt-3 font-display text-[clamp(30px,4.5vw,64px)] font-extrabold leading-tight">{winner?.nickname ?? "—"}</h1>
+          <p className="mt-1 text-[16px] font-bold text-mut">{winner?.firstName} {winner?.lastName}</p>
+          <div className="mx-auto mt-6 w-fit"><Avatar user={winner} size={130} ring /></div>
+          <p className="mt-5 text-[14px] font-bold uppercase tracking-[0.2em] text-dim">«{t.name}» · {fmtDate(t.results.completedAt)}</p>
+          <p className="num mt-2 text-[24px] font-extrabold text-(--acc)">+{fmtNum(t.results.pointsAwarded[t.results.winner] ?? 0)} очков в рейтинг</p>
+        </div>
+        <div className="panel max-h-[76vh] overflow-hidden p-5">
+          <p className="lbl !mb-3">Топ-10 · очки</p>
+          <div className="space-y-1.5">
+            {top.map((uidv, i) => {
+              const u = users[uidv];
+              return (
+                <div key={uidv} className={cn("anim-slide flex items-center gap-3.5 rounded-xl px-3.5 py-2.5", i === 0 ? "bg-[#ffd76a]/10 ring-1 ring-[#ffd76a]/35" : i < 3 ? "bg-(--acc-soft)" : "bg-white/[0.03]")}
+                  style={{ animationDelay: `${i * 110}ms` }}>
+                  <span className={cn("num w-10 text-center font-display text-[20px] font-extrabold", i === 0 ? "text-[#ffd76a]" : i === 1 ? "text-[#c9d4e5]" : i === 2 ? "text-[#d9915b]" : "text-dim")}>{i + 1}</span>
+                  <Avatar user={u} size={44} ring={i < 3} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-display text-[16px] font-bold">{u?.nickname ?? "—"}</span>
+                    <span className="text-[12px] font-semibold text-dim">{u?.firstName} {u?.lastName}</span>
+                  </span>
+                  <span className="num text-[20px] font-extrabold text-(--acc)">+{t.results!.pointsAwarded[uidv] ?? 0}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </TvFrame>
+  );
+}
+
+/* ================================ RANKING ================================ */
+export function TvRanking() {
+  const { users, tournaments, seasons } = useFirebaseData();
+  const seasonsList = useMemo(() => Object.values(seasons).sort((a, b) => Number(b.isActive) - Number(a.isActive) || b.startDate - a.startDate), [seasons]);
+  const [mode, setMode] = useState<"all" | number>("all");
+  
+  useEffect(() => {
+    const i = setInterval(() => {
+      setMode((m) => (m === "all" ? 0 : m + 1 >= seasonsList.length ? "all" : m + 1));
+    }, 16000);
+    return () => clearInterval(i);
+  }, [seasonsList.length]);
+
+  const rows = useMemo(() => {
+    if (mode === "all") {
+      return Object.values(users).filter((u) => !u.isArchived).sort((a, b) => b.stats.points - a.stats.points).slice(0, 20)
+        .map((u, i) => ({ uid: u.uid, place: i + 1, points: u.stats.points, games: u.stats.totalTournaments, wins: u.stats.wins }));
+    }
+    const sn = seasonsList[mode]; if (!sn) return [];
+    const rating = computeSeasonRating(users, tournaments, sn.id);
+    return rating.slice(0, 20).map((r, i) => ({ uid: r.uid, place: i + 1, points: r.points, games: r.games, wins: r.wins }));
+  }, [mode, users, tournaments, seasonsList]);
+  
+  const title = mode === "all" ? "Рейтинг за все время" : seasonsList[mode]?.name ?? "";
+
+  return (
+    <TvFrame right={<span className="rounded-full bg-(--acc-soft) px-4 py-1.5 text-[13px] font-extrabold uppercase tracking-widest text-(--acc)">ТОП-20 клуба</span>}>
+      <div className="mx-auto flex h-full max-w-[1100px] flex-col py-2">
+        <div className="mb-3 flex flex-wrap items-center justify-center gap-2">
+          <button onClick={() => setMode("all")}
+            className={cn("rounded-full border px-5 py-2 text-[13px] font-extrabold uppercase tracking-wider transition-all duration-300",
+              mode === "all" ? "border-(--acc) bg-(--acc) text-(--acc-ink) shadow-[0_8px_26px_-10px_var(--acc)]" : "border-line bg-white/[0.04] text-mut hover:text-ink hover:border-(--acc-line)")}>
+            Все время
+          </button>
+          {seasonsList.map((sn, i) => (
+            <button key={sn.id} onClick={() => setMode(i)}
+              className={cn("rounded-full border px-5 py-2 text-[13px] font-extrabold uppercase tracking-wider transition-all duration-300",
+                mode === i ? "border-(--acc) bg-(--acc) text-(--acc-ink) shadow-[0_8px_26px_-10px_var(--acc)]" : "border-line bg-white/[0.04] text-mut hover:text-ink hover:border-(--acc-line)")}>
+              {sn.name.replace(/^Сезон\s*/i, "Сезон ")}
+            </button>
+          ))}
+        </div>
+        <div className="mb-4 text-center">
+          <p className="text-[12px] font-extrabold uppercase tracking-[0.34em] text-(--acc)">таблица лидеров</p>
+          <h1 key={String(mode)} className="anim-pop mt-1 font-display text-[clamp(24px,3.4vw,46px)] font-extrabold">{title}</h1>
+        </div>
+        <div key={String(mode)} className="panel anim-in flex-1 overflow-hidden px-4 py-3">
+          {rows.map((r, i) => {
+            const u = users[r.uid];
+            return (
+              <div key={r.uid} className={cn("flex items-center gap-4 border-b border-line/60 px-3 py-[0.85vh] last:border-0", i < 3 && "bg-(--acc-soft) rounded-xl border-0")}>
+                <span className={cn("num w-12 text-center font-display text-[clamp(17px,1.8vw,26px)] font-extrabold", i === 0 ? "text-[#ffd76a]" : i === 1 ? "text-[#c9d4e5]" : i === 2 ? "text-[#d9915b]" : "text-dim")}>{r.place}</span>
+                <Avatar user={u} size={48} ring={i < 3} />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-display text-[clamp(14px,1.5vw,20px)] font-bold">{u?.nickname ?? "—"}</span>
+                  <span className="text-[clamp(11px,1vw,13.5px)] font-semibold text-dim">{r.games} {plural(r.games, "игра", "игры", "игр")} · {r.wins} {plural(r.wins, "победа", "победы", "побед")}</span>
+                </span>
+                <span className="num text-[clamp(18px,2vw,28px)] font-extrabold text-(--acc)">{fmtNum(r.points)}</span>
+                <span className="hidden text-[11px] font-bold uppercase tracking-wider text-dim sm:block">очков</span>
+              </div>
+            );
+          })}
+          {rows.length === 0 && <p className="grid h-full place-items-center text-xl font-bold text-dim">Пока нет данных</p>}
+        </div>
+      </div>
+    </TvFrame>
+  );
+}
