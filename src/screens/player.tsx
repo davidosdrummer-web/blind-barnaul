@@ -5,9 +5,16 @@ import {
   BellRing, Megaphone, UserCircle2, CheckCheck, Undo2, Timer, Coins, Repeat, Camera, Trash2,
 } from "lucide-react";
 import {
-  useDb, useMe, computeSeasonRating, registerSelf, cancelSelf, updateProfile, markAllRead, markRead,
-  fmtDate, fmtDateShort, fmtNum, plural, capacity, lateRegOpen, Tournament, User, Root,
+  useFirebaseData
+} from "../lib/useFirebaseData";
+import { useAuth } from "../lib/useAuth";
+import {
+  fmtDate, fmtDateShort, fmtNum, plural, capacity, lateRegOpen, Tournament, User,
+  computeSeasonRating,
 } from "../lib/db";
+import {
+  registerSelf, cancelSelf, updateProfile, markAllRead, markRead,
+} from "../lib/firebaseDb";
 import { Avatar, Badge, Bars, Btn, Empty, Field, Modal, Reveal, SectionTitle, StatTile, StatusBadge, cn, toast, AchIcon, fileToAvatar } from "../lib/ui";
 
 const HUES = [152, 205, 260, 340, 25, 190, 300, 90, 220, 45, 170, 355];
@@ -21,31 +28,50 @@ function placeTone(p: number) {
 
 /* ============================== ГЛАВНАЯ ============================== */
 export default function PlayerHome() {
-  const s = useDb();
-  const me = useMe();
+  const { users, tournaments, seasons } = useFirebaseData();
+  const { firebaseUser } = useAuth();
   const nav = useNavigate();
   const [edit, setEdit] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({ nickname: "", firstName: "", lastName: "", phone: "", email: "", hue: 152, avatar: "" });
+  
+  const me = firebaseUser ? users[firebaseUser.uid] : null;
   if (!me) return null;
 
-  const rating = Object.values(s.users).filter((u) => !u.isArchived).sort((a, b) => b.stats.points - a.stats.points);
+  const rating = Object.values(users).filter((u) => !u.isArchived).sort((a, b) => b.stats.points - a.stats.points);
   const myPlace = rating.findIndex((u) => u.uid === me.uid) + 1;
   const activeT =
-    Object.values(s.tournaments).find((t) => t.status === "active" && t.registeredPlayers[me.uid]) ??
-    Object.values(s.tournaments).find((t) => t.status === "active" && !t.isFinal);
+    Object.values(tournaments).find((t) => t.status === "active" && t.registeredPlayers[me.uid]) ??
+    Object.values(tournaments).find((t) => t.status === "active" && !t.isFinal);
   const myReg = activeT?.registeredPlayers[me.uid];
-  const planned = Object.values(s.tournaments).filter((t) => t.status === "planned" && t.registeredPlayers[me.uid]);
-  const hist = Object.entries(me.tournamentHistory).sort((a, b) => b[1].date - a[1].date).slice(0, 4);
+  const planned = Object.values(tournaments).filter((t) => t.status === "planned" && t.registeredPlayers[me.uid]);
+  const hist = Object.entries(me.tournamentHistory || {}).sort((a, b) => b[1].date - a[1].date).slice(0, 4);
 
   const openEdit = () => {
-    setForm({ nickname: me.nickname, firstName: me.firstName, lastName: me.lastName, phone: me.phone, email: me.email, hue: me.hue, avatar: me.avatar ?? "" });
+    setForm({ 
+      nickname: me.nickname, 
+      firstName: me.firstName, 
+      lastName: me.lastName, 
+      phone: me.phone, 
+      email: me.email, 
+      hue: me.hue, 
+      avatar: me.avatar ?? "" 
+    });
     setEdit(true);
   };
-  const saveEdit = () => {
+  
+  const saveEdit = async () => {
     if (!form.nickname.trim() || !form.firstName.trim()) { toast("Никнейм и имя обязательны", "err"); return; }
-    updateProfile(me.uid, { ...form, avatar: form.avatar || undefined });
-    setEdit(false);
-    toast("Профиль обновлён");
+    setLoading(true);
+    try {
+      await updateProfile(me.uid, { ...form, avatar: form.avatar || undefined });
+      setEdit(false);
+      toast("Профиль обновлён");
+    } catch (err: any) {
+      toast(err.message || "Ошибка", "err");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -60,7 +86,9 @@ export default function PlayerHome() {
             <div className="min-w-0 flex-1">
               <p className="font-display text-[17px] font-extrabold text-white">«{activeT.name}» идёт прямо сейчас</p>
               <p className="mt-0.5 text-[13px] font-semibold text-white/65">
-                {myReg.isEliminated ? "Вы выбыли — доступен возврат через пульт" : myReg.seatCode ? `Ваше место: ${myReg.seatCode} · фишки: ${fmtNum(myReg.chips)}` : "Вы записаны, ожидаете рассадки"}
+                {myReg.isEliminated ? "Вы выбыли — доступен возврат через пульт" : 
+                 myReg.seatCode ? `Ваше место: ${myReg.seatCode} · фишки: ${fmtNum(myReg.chips)}` : 
+                 "Вы записаны, ожидаете рассадки"}
               </p>
             </div>
             <a href={`#/screen/main/${activeT.id}`} className="rounded-xl border border-white/20 bg-black/30 px-4 py-2.5 text-[13px] font-extrabold text-white transition hover:bg-black/50">
@@ -135,7 +163,7 @@ export default function PlayerHome() {
                   <div key={tid} className="flex items-center gap-3 border-b border-line py-2.5 last:border-0">
                     <span className={cn("num w-10 shrink-0 text-center font-display text-[17px] font-extrabold", placeTone(h.place))}>#{h.place}</span>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-[13.5px] font-bold">{s.tournaments[tid]?.name ?? "Турнир"}</p>
+                      <p className="truncate text-[13.5px] font-bold">{tournaments[tid]?.name ?? "Турнир"}</p>
                       <p className="text-[12px] text-dim">{fmtDateShort(h.date)} · {h.knockouts} {plural(h.knockouts, "нокаут", "нокаута", "нокаутов")}</p>
                     </div>
                     <span className="num text-[14px] font-extrabold text-(--acc)">+{h.points}</span>
@@ -159,10 +187,16 @@ export default function PlayerHome() {
                   <Camera className="size-4" /> Загрузить фото
                   <input type="file" accept="image/*" className="hidden"
                     onChange={async (e) => {
-                      const f = e.target.files?.[0]; e.target.value = "";
+                      const f = e.target.files?.[0]; 
+                      e.target.value = "";
                       if (!f) return;
-                      try { const url = await fileToAvatar(f); setForm((p) => ({ ...p, avatar: url })); toast("Фото загружено — нажмите «Сохранить»"); }
-                      catch { toast("Не удалось прочитать изображение", "err"); }
+                      try { 
+                        const url = await fileToAvatar(f); 
+                        setForm((p) => ({ ...p, avatar: url })); 
+                        toast("Фото загружено — нажмите «Сохранить»"); 
+                      } catch { 
+                        toast("Не удалось прочитать изображение", "err"); 
+                      }
                     }} />
                 </label>
                 {form.avatar && (
@@ -190,37 +224,60 @@ export default function PlayerHome() {
           </Field>
           <div className="flex justify-end gap-2 pt-1">
             <Btn variant="ghost" onClick={() => setEdit(false)}>Отмена</Btn>
-            <Btn onClick={saveEdit}>Сохранить</Btn>
+            <Btn onClick={saveEdit} disabled={loading}>Сохранить</Btn>
           </div>
         </div>
       </Modal>
     </div>
   );
 }
-
 /* ============================== ТУРНИРЫ ============================== */
 export function PlayerTournaments() {
-  const s = useDb();
-  const me = useMe();
+  const { tournaments, seasons } = useFirebaseData();
+  const { firebaseUser } = useAuth();
+  const [loading, setLoading] = useState(false);
+  
+  const me = firebaseUser ? tournaments[firebaseUser.uid] : null;
   if (!me) return null;
-  const open = Object.values(s.tournaments)
+  
+  const open = Object.values(tournaments)
     .filter((t) => t.status !== "completed")
-    .filter((t) => !(t.isFinal && !t.registeredPlayers[me.uid])) // финал сезона видят только приглашённые
+    .filter((t) => !(t.isFinal && !t.registeredPlayers[firebaseUser!.uid]))
     .sort((a, b) => a.startDate - b.startDate);
-  const hist = Object.entries(me.tournamentHistory).sort((a, b) => b[1].date - a[1].date);
+  
+  const hist = Object.entries(me.tournamentHistory || {}).sort((a, b) => b[1].date - a[1].date);
 
-  const onReg = (t: Tournament) => {
-    const err = registerSelf(t.id, me.uid);
-    if (err) toast(err, "err"); else toast(`Вы записаны на «${t.name}»`);
+  const onReg = async (t: Tournament) => {
+    setLoading(true);
+    try {
+      const err = await registerSelf(t.id, firebaseUser!.uid);
+      if (err) toast(err, "err"); 
+      else toast(`Вы записаны на «${t.name}»`);
+    } catch (err: any) {
+      toast(err.message || "Ошибка", "err");
+    } finally {
+      setLoading(false);
+    }
   };
-  const onUnreg = (t: Tournament) => { cancelSelf(t.id, me.uid); toast(`Запись на «${t.name}» отменена`, "info"); };
+  
+  const onUnreg = async (t: Tournament) => {
+    setLoading(true);
+    try {
+      await cancelSelf(t.id, firebaseUser!.uid); 
+      toast(`Запись на «${t.name}» отменена`, "info");
+    } catch (err: any) {
+      toast(err.message || "Ошибка", "err");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div>
       <SectionTitle kicker="Игровой календарь" title="Турниры" right={<Badge tone="mut">{open.length} {plural(open.length, "открыт", "открыто", "открыто")}</Badge>} />
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {open.map((t, i) => {
-          const reg = t.registeredPlayers[me.uid];
+          const reg = t.registeredPlayers[firebaseUser!.uid];
           const cap = capacity(t);
           const cnt = Object.keys(t.registeredPlayers).length;
           const regOpen = lateRegOpen(t);
@@ -232,7 +289,7 @@ export function PlayerTournaments() {
                   {!regOpen && t.status === "active" && <Badge tone="bad">Регистрация закрыта</Badge>}
                 </div>
                 <h3 className="mt-3 font-display text-[16.5px] font-extrabold leading-snug">{t.name}</h3>
-                <p className="mt-1 text-[12.5px] text-mut">{s.seasons[t.seasonId]?.name ?? "Вне сезона"}</p>
+                <p className="mt-1 text-[12.5px] text-mut">{seasons[t.seasonId]?.name ?? "Вне сезона"}</p>
                 <div className="mt-4 grid grid-cols-2 gap-2 text-[12.5px] font-semibold text-mut">
                   <span className="flex items-center gap-1.5"><CalendarDays className="size-4 text-(--acc)" /> {fmtDate(t.startDate)}, {t.startTime}</span>
                   <span className="flex items-center gap-1.5"><Coins className="size-4 text-(--acc)" /> стек {fmtNum(t.startingStack)}</span>
@@ -249,10 +306,10 @@ export function PlayerTournaments() {
                       <Btn variant="soft" size="sm" className="flex-1" disabled>
                         <CheckCheck className="size-4" /> {reg.seatCode ? `Место ${reg.seatCode}` : "Вы записаны"}
                       </Btn>
-                      {t.status !== "active" && <Btn variant="dark" size="sm" onClick={() => onUnreg(t)}><Undo2 className="size-4" /></Btn>}
+                      {t.status !== "active" && <Btn variant="dark" size="sm" onClick={() => onUnreg(t)} disabled={loading}><Undo2 className="size-4" /></Btn>}
                     </div>
                   ) : (
-                    <Btn className="w-full" size="sm" disabled={!regOpen || cnt >= cap} onClick={() => onReg(t)}>Записаться</Btn>
+                    <Btn className="w-full" size="sm" disabled={!regOpen || cnt >= cap || loading} onClick={() => onReg(t)}>Записаться</Btn>
                   )}
                 </div>
               </div>
@@ -273,7 +330,7 @@ export function PlayerTournaments() {
                 {hist.map(([tid, h]) => (
                   <tr key={tid}>
                     <td><span className={cn("num font-display text-[16px] font-extrabold", placeTone(h.place))}>#{h.place}</span></td>
-                    <td className="font-bold">{s.tournaments[tid]?.name ?? "—"}</td>
+                    <td className="font-bold">{tournaments[tid]?.name ?? "—"}</td>
                     <td className="text-mut">{fmtDate(h.date)}</td>
                     <td className="num font-extrabold text-(--acc)">+{h.points}</td>
                     <td className="num text-mut">{h.knockouts}</td>
@@ -291,11 +348,14 @@ export function PlayerTournaments() {
 
 /* ============================== СТАТИСТИКА ============================== */
 export function PlayerStats() {
-  const me = useMe();
+  const { tournaments, seasons } = useFirebaseData();
+  const { firebaseUser } = useAuth();
+  
+  const me = firebaseUser ? tournaments[firebaseUser.uid] : null;
   if (!me) return null;
+  
   const stt = me.stats;
-  const hist = Object.entries(me.tournamentHistory).sort((a, b) => a[1].date - b[1].date).slice(-10);
-  const s = useDb();
+  const hist = Object.entries(me.tournamentHistory || {}).sort((a, b) => a[1].date - b[1].date).slice(-10);
   const bars = hist.map(([, h]) => ({ label: fmtDateShort(h.date), value: h.points, hint: `${h.place} место` }));
 
   return (
@@ -324,19 +384,24 @@ export function PlayerStats() {
             : <Bars data={bars} height={170} />}
         </div>
       </Reveal>
-      <p className="mt-3 text-[12px] font-semibold text-dim">Всего очков за карьеру: <b className="num text-(--acc)">{fmtNum(stt.points)}</b> · сыграно в сезоне: {fmtNum(Object.values(s.seasons).find((x) => x.isActive) ? hist.length : hist.length)}</p>
+      <p className="mt-3 text-[12px] font-semibold text-dim">
+        Всего очков за карьеру: <b className="num text-(--acc)">{fmtNum(stt.points)}</b> · сыграно в сезоне: {fmtNum(Object.values(seasons).find((x) => x.isActive) ? hist.length : hist.length)}
+      </p>
     </div>
   );
 }
-
 /* ============================== ДОСТИЖЕНИЯ ============================== */
 export function PlayerAchievements() {
-  const s = useDb();
-  const me = useMe();
+  const { achievements } = useFirebaseData();
+  const { firebaseUser } = useAuth();
+  
+  const me = firebaseUser ? achievements[firebaseUser.uid] : null;
   if (!me) return null;
-  const achs = Object.values(s.achievements).sort((a, b) => a.createdAt - b.createdAt);
-  const earned = achs.filter((a) => me.achievements[a.id]);
-  const locked = achs.filter((a) => !me.achievements[a.id]);
+  
+  const achs = Object.values(achievements).sort((a, b) => a.createdAt - b.createdAt);
+  const earned = achs.filter((a) => me.achievements?.[a.id]);
+  const locked = achs.filter((a) => !me.achievements?.[a.id]);
+  
   const metricLabel: Record<string, string> = {
     totalTournaments: "сыграно турниров", wins: "побед", top3: "попаданий в топ-3", finalTables: "финальных столов",
     knockouts: "выбито игроков", rebuyAddon: "ребаев и адд-онов", reentry: "ре-энтри", bestScore: "лучший результат",
@@ -362,7 +427,7 @@ export function PlayerAchievements() {
                 <div className="min-w-0">
                   <h3 className="font-display text-[14.5px] font-extrabold">{a.name}</h3>
                   <p className="mt-1 text-[12.5px] leading-snug text-mut">{a.description}</p>
-                  <p className="mt-2 text-[11px] font-extrabold uppercase tracking-wider text-(--acc)">Получено {fmtDate(me.achievements[a.id].earnedAt)}</p>
+                  <p className="mt-2 text-[11px] font-extrabold uppercase tracking-wider text-(--acc)">Получено {fmtDate(me.achievements?.[a.id]?.earnedAt || Date.now())}</p>
                 </div>
               </div>
             </div>
@@ -398,20 +463,24 @@ export function PlayerAchievements() {
 
 /* ============================== РЕЙТИНГ ============================== */
 export function PlayerRating() {
-  const s = useDb();
-  const me = useMe();
+  const { users, tournaments, seasons } = useFirebaseData();
+  const { firebaseUser } = useAuth();
   const [mode, setMode] = useState<"season" | "all">("season");
-  const seasons = Object.values(s.seasons).sort((a, b) => Number(b.isActive) - Number(a.isActive) || b.startDate - a.startDate);
-  const [sid, setSid] = useState(seasons.find((x) => x.isActive)?.id ?? seasons[0]?.id ?? "");
+  
+  const me = firebaseUser ? users[firebaseUser.uid] : null;
   if (!me) return null;
+  
+  const seasonsList = Object.values(seasons).sort((a, b) => Number(b.isActive) - Number(a.isActive) || b.startDate - a.startDate);
+  const [sid, setSid] = useState(seasonsList.find((x) => x.isActive)?.id ?? seasonsList[0]?.id ?? "");
 
   const rows = useMemo(() => {
     if (mode === "all") {
-      return Object.values(s.users).filter((u) => !u.isArchived).sort((a, b) => b.stats.points - a.stats.points)
+      return Object.values(users).filter((u) => !u.isArchived).sort((a, b) => b.stats.points - a.stats.points)
         .map((u, i) => ({ uid: u.uid, place: i + 1, points: u.stats.points, games: u.stats.totalTournaments, wins: u.stats.wins }));
     }
-    return computeSeasonRating(s, sid).map((r, i) => ({ uid: r.uid, place: i + 1, points: r.points, games: r.games, wins: r.wins }));
-  }, [mode, sid, s]);
+    const rating = computeSeasonRating(users, tournaments, sid);
+    return rating.map((r, i) => ({ uid: r.uid, place: i + 1, points: r.points, games: r.games, wins: r.wins }));
+  }, [mode, sid, users, tournaments]);
 
   return (
     <div>
@@ -420,7 +489,7 @@ export function PlayerRating() {
           <div className="flex flex-wrap items-center gap-2">
             {mode === "season" && (
               <select className="inp !min-h-[40px] !w-auto !py-1.5 text-[13px]" value={sid} onChange={(e) => setSid(e.target.value)}>
-                {seasons.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+                {seasonsList.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
               </select>
             )}
             <div className="flex rounded-xl border border-line bg-white/[0.03] p-1">
@@ -434,7 +503,7 @@ export function PlayerRating() {
       <div className="panel overflow-hidden">
         {rows.length === 0 && <Empty title="В этом сезоне ещё нет результатов" />}
         {rows.map((r, i) => {
-          const u: User | undefined = s.users[r.uid];
+          const u: User | undefined = users[r.uid];
           if (!u) return null;
           const isMe = r.uid === me.uid;
           return (
@@ -461,10 +530,14 @@ export function PlayerRating() {
 
 /* ============================== УВЕДОМЛЕНИЯ ============================== */
 export function PlayerNotifs() {
-  const s = useDb();
-  const me = useMe();
+  const { users } = useFirebaseData();
+  const { firebaseUser } = useAuth();
+  const [loading, setLoading] = useState(false);
+  
+  const me = firebaseUser ? users[firebaseUser.uid] : null;
   if (!me) return null;
-  const list = Object.values(me.notifications).sort((a, b) => b.timestamp - a.timestamp);
+  
+  const list = Object.values(me.notifications || {}).sort((a, b) => b.timestamp - a.timestamp);
   const unread = list.filter((n) => !n.read).length;
   const iconOf = (t: string) =>
     t === "club" ? <Megaphone className="size-4.5" /> : t === "tournament" ? <Trophy className="size-4.5" /> : <UserCircle2 className="size-4.5" />;
@@ -472,14 +545,36 @@ export function PlayerNotifs() {
   return (
     <div>
       <SectionTitle kicker="Оповещения" title="Уведомления"
-        right={unread > 0 ? <Btn variant="soft" size="sm" onClick={() => { markAllRead(me.uid); toast("Все уведомления прочитаны"); }}><CheckCheck className="size-4" /> Прочитать все ({unread})</Btn> : <Badge tone="mut"><BellRing className="size-3.5" /> всё прочитано</Badge>} />
+        right={unread > 0 ? 
+          <Btn variant="soft" size="sm" onClick={async () => { 
+            setLoading(true);
+            try {
+              await markAllRead(me.uid); 
+              toast("Все уведомления прочитаны"); 
+            } catch (err: any) {
+              toast(err.message || "Ошибка", "err");
+            } finally {
+              setLoading(false);
+            }
+          }} disabled={loading}><CheckCheck className="size-4" /> Прочитать все ({unread})</Btn> : 
+          <Badge tone="mut"><BellRing className="size-3.5" /> всё прочитано</Badge>
+        } />
       {list.length === 0 ? (
         <div className="panel"><Empty title="Уведомлений пока нет" text="Здесь появятся оповещения клуба, турнирные события и новости аккаунта." icon={<BellRing className="size-7" />} /></div>
       ) : (
         <div className="space-y-2.5">
           {list.map((n, i) => (
             <Reveal key={n.id} delay={Math.min(i * 40, 300)}>
-              <button onClick={() => markRead(me.uid, n.id)}
+              <button onClick={async () => { 
+                setLoading(true);
+                try {
+                  await markRead(me.uid, n.id); 
+                } catch (err: any) {
+                  toast(err.message || "Ошибка", "err");
+                } finally {
+                  setLoading(false);
+                }
+              }} disabled={loading}
                 className={cn("panel flex w-full items-start gap-4 px-4 py-4 text-left transition-all duration-300 hover:border-(--acc-line)/60", !n.read && "border-(--acc-line)/50")}>
                 <span className={cn("grid size-10 shrink-0 place-items-center rounded-xl", !n.read ? "bg-(--acc-soft) text-(--acc)" : "bg-white/[0.05] text-dim")}>{iconOf(n.type)}</span>
                 <span className="min-w-0 flex-1">

@@ -6,11 +6,19 @@ import {
   ArrowUpDown, RotateCcw, FileStack, Save, Volume2, VolumeX, Sparkles, LayoutGrid, X, Flag,
 } from "lucide-react";
 import {
-  useDb, User, Role, Root, Achievement, CondType, ACCENTS, BGS, updateClub, resetDemo,
-  adminSaveUser, toggleBlock, toggleArchive, removeUser, saveSeason, deleteSeason, setSeasonFinal,
-  formFinal, computeSeasonRating, saveAchievement, deleteAchievement, setScreen, saveTemplate,
-  deleteTemplate, fmtDate, fmtDateShort, fmtNum, plural, capacity, Season, Tournament,
+  useFirebaseData
+} from "../lib/useFirebaseData";
+import { useAuth } from "../lib/useAuth";
+import {
+  User, Role, Achievement, CondType, ACCENTS, BGS,
+  fmtDate, fmtDateShort, fmtNum, plural, capacity, Season, Tournament,
+  computeSeasonRating,
 } from "../lib/db";
+import {
+  updateClub, adminSaveUser, toggleBlock, toggleArchive, removeUser,
+  saveSeason, deleteSeason, setSeasonFinal, formFinal,
+  saveAchievement, deleteAchievement, setScreen, saveTemplate, deleteTemplate,
+} from "../lib/firebaseDb";
 import { Avatar, AchIcon, Badge, Btn, Empty, Field, Modal, Reveal, SectionTitle, Select, StatusBadge, Toggle, cn, toast } from "../lib/ui";
 
 const toISO = (ts: number) => new Date(ts - new Date(ts).getTimezoneOffset() * 60000).toISOString().slice(0, 10);
@@ -24,16 +32,21 @@ const ACH_ICONS = ["trophy", "medal", "star", "target", "bolt", "shield", "crown
 
 /* ================================ УЧАСТНИКИ ================================ */
 export function Members({ ro }: { ro: boolean }) {
-  const s = useDb();
+  const { users } = useFirebaseData();
+  const { firebaseUser } = useAuth();
   const [q, setQ] = useState("");
   const [roleF, setRoleF] = useState("all");
   const [showHidden, setShowHidden] = useState(false);
   const [editU, setEditU] = useState<User | null>(null);
   const [isNew, setIsNew] = useState(false);
   const [delU, setDelU] = useState<User | null>(null);
-  const [form, setForm] = useState({ nickname: "", firstName: "", lastName: "", email: "", phone: "", role: "player" as Role, startPoints: 0, hue: 205 });
+  const [loading, setLoading] = useState(false);
+  const [form, setForm] = useState({ 
+    nickname: "", firstName: "", lastName: "", email: "", phone: "", 
+    role: "player" as Role, startPoints: 0, hue: 205 
+  });
 
-  const users = Object.values(s.users)
+  const usersList = Object.values(users)
     .filter((u) => showHidden || (!u.isArchived && !u.isBlocked))
     .filter((u) => roleF === "all" || u.role === roleF)
     .filter((u) => (u.nickname + u.firstName + u.lastName + u.email).toLowerCase().includes(q.toLowerCase()))
@@ -46,13 +59,22 @@ export function Members({ ro }: { ro: boolean }) {
       : { nickname: "", firstName: "", lastName: "", email: "", phone: "", role: "player", startPoints: 0, hue: Math.floor(Math.random() * 360) });
     setEditU(u ?? ({ uid: "" } as User));
   };
-  const save = () => {
+  
+  const save = async () => {
     if (!form.nickname.trim() || !form.firstName.trim()) { toast("Никнейм и имя обязательны", "err"); return; }
-    const err = adminSaveUser(isNew ? null : editU!.uid, form);
-    if (err) { toast(err, "err"); return; }
-    toast(isNew ? "Игрок создан и уведомлён" : "Данные обновлены");
-    setEditU(null);
+    setLoading(true);
+    try {
+      const err = await adminSaveUser(isNew ? null : editU!.uid, form);
+      if (err) { toast(err, "err"); return; }
+      toast(isNew ? "Игрок создан и уведомлён" : "Данные обновлены");
+      setEditU(null);
+    } catch (err: any) {
+      toast(err.message || "Ошибка", "err");
+    } finally {
+      setLoading(false);
+    }
   };
+  
   const lastGame = (u: User) => {
     const h = Object.values(u.tournamentHistory).sort((a, b) => b.date - a.date)[0];
     return h ? fmtDateShort(h.date) : "—";
@@ -78,7 +100,7 @@ export function Members({ ro }: { ro: boolean }) {
         <table className="tbl min-w-[880px]">
           <thead><tr><th>Участник</th><th>Контакты</th><th>Роль</th><th>Очки</th><th>Регистрация</th><th>Активность</th>{!ro && <th className="text-right">Действия</th>}</tr></thead>
           <tbody>
-            {users.map((u) => (
+            {usersList.map((u) => (
               <tr key={u.uid} className={cn(u.isBlocked && "opacity-55", u.isArchived && "opacity-40")}>
                 <td>
                   <span className="flex items-center gap-3">
@@ -100,8 +122,28 @@ export function Members({ ro }: { ro: boolean }) {
                   <td>
                     <span className="flex justify-end gap-1">
                       <RowBtn title="Редактировать" onClick={() => openEdit(u)}><Pencil className="size-4" /></RowBtn>
-                      <RowBtn title={u.isBlocked ? "Разблокировать" : "Заблокировать"} onClick={() => { toggleBlock(u.uid); toast(u.isBlocked ? "Разблокирован" : "Заблокирован", "info"); }}><Ban className={cn("size-4", !u.isBlocked && "text-bad")} /></RowBtn>
-                      <RowBtn title={u.isArchived ? "Вернуть из архива" : "Архивировать"} onClick={() => { toggleArchive(u.uid); toast(u.isArchived ? "Возвращён из архива" : "Архивирован", "info"); }}><Archive className="size-4" /></RowBtn>
+                      <RowBtn title={u.isBlocked ? "Разблокировать" : "Заблокировать"} onClick={async () => { 
+                        setLoading(true);
+                        try {
+                          await toggleBlock(u.uid); 
+                          toast(u.isBlocked ? "Разблокирован" : "Заблокирован", "info"); 
+                        } catch (err: any) {
+                          toast(err.message || "Ошибка", "err");
+                        } finally {
+                          setLoading(false);
+                        }
+                      }}><Ban className={cn("size-4", !u.isBlocked && "text-bad")} /></RowBtn>
+                      <RowBtn title={u.isArchived ? "Вернуть из архива" : "Архивировать"} onClick={async () => { 
+                        setLoading(true);
+                        try {
+                          await toggleArchive(u.uid); 
+                          toast(u.isArchived ? "Возвращён из архива" : "Архивирован", "info"); 
+                        } catch (err: any) {
+                          toast(err.message || "Ошибка", "err");
+                        } finally {
+                          setLoading(false);
+                        }
+                      }}><Archive className="size-4" /></RowBtn>
                       <RowBtn title="Удалить" onClick={() => setDelU(u)}><Trash2 className="size-4 text-bad" /></RowBtn>
                     </span>
                   </td>
@@ -110,7 +152,7 @@ export function Members({ ro }: { ro: boolean }) {
             ))}
           </tbody>
         </table>
-        {users.length === 0 && <Empty title="Никого не нашли" text="Измените фильтры или создайте нового игрока." />}
+        {usersList.length === 0 && <Empty title="Никого не нашли" text="Измените фильтры или создайте нового игрока." />}
       </div>
 
       <Modal open={!!editU} onClose={() => setEditU(null)} title={isNew ? "Новый участник клуба" : `Редактировать: ${editU?.nickname}`}
@@ -128,46 +170,68 @@ export function Members({ ro }: { ro: boolean }) {
           <Field label="Телефон"><input type="tel" className="inp" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
           {isNew && <Field label="Начислить стартовые очки"><input type="number" className="inp" value={form.startPoints} onChange={(e) => setForm({ ...form, startPoints: +e.target.value || 0 })} /></Field>}
         </div>
-        <div className="mt-5 flex justify-end gap-2"><Btn variant="ghost" onClick={() => setEditU(null)}>Отмена</Btn><Btn onClick={save}><Save className="size-4" /> Сохранить</Btn></div>
+        <div className="mt-5 flex justify-end gap-2">
+          <Btn variant="ghost" onClick={() => setEditU(null)}>Отмена</Btn>
+          <Btn onClick={save} disabled={loading}><Save className="size-4" /> Сохранить</Btn>
+        </div>
       </Modal>
 
       <Modal open={!!delU} onClose={() => setDelU(null)} title="Удалить участника?" subtitle={`${delU?.nickname} · ${delU?.firstName} ${delU?.lastName}`}>
         <p className="text-[13.5px] font-semibold leading-relaxed text-mut">Профиль, статистика и турнирные записи будут удалены безвозвратно. Рекомендуется архивировать вместо удаления.</p>
         <div className="mt-5 flex justify-end gap-2">
           <Btn variant="ghost" onClick={() => setDelU(null)}>Отмена</Btn>
-          <Btn variant="danger" onClick={() => { if (delU) { removeUser(delU.uid); toast("Участник удалён", "info"); } setDelU(null); }}><Trash2 className="size-4" /> Удалить</Btn>
+          <Btn variant="danger" onClick={async () => { 
+            if (delU) { 
+              setLoading(true);
+              try {
+                await removeUser(delU.uid); 
+                toast("Участник удалён", "info"); 
+              } catch (err: any) {
+                toast(err.message || "Ошибка", "err");
+              } finally {
+                setLoading(false);
+              }
+            } 
+            setDelU(null); 
+          }} disabled={loading}><Trash2 className="size-4" /> Удалить</Btn>
         </div>
       </Modal>
     </div>
   );
 }
+
 function RowBtn({ children, onClick, title }: { children: React.ReactNode; onClick: () => void; title: string }) {
   return <button title={title} onClick={onClick} className="grid size-8.5 place-items-center rounded-lg border border-line bg-white/[0.04] text-mut transition hover:border-(--acc-line) hover:text-ink">{children}</button>;
 }
 
 /* ================================ РЕЙТИНГ (админ) ================================ */
 export function AdminRating() {
-  const s = useDb();
+  const { users, tournaments, seasons } = useFirebaseData();
   const [mode, setMode] = useState<"all" | "season">("all");
-  const seasons = Object.values(s.seasons).sort((a, b) => Number(b.isActive) - Number(a.isActive));
-  const [sid, setSid] = useState(seasons.find((x) => x.isActive)?.id ?? seasons[0]?.id ?? "");
+  const seasonsList = Object.values(seasons).sort((a, b) => Number(b.isActive) - Number(a.isActive));
+  const [sid, setSid] = useState(seasonsList.find((x) => x.isActive)?.id ?? seasonsList[0]?.id ?? "");
   const [sortK, setSortK] = useState("points");
   const [dir, setDir] = useState(-1);
 
   type Row = { uid: string; nick: string; first: string; last: string; user: User; points: number; games: number; wins: number; top3: number; ft: number; best: number; kos: number; rebs: number };
   const rows: Row[] = useMemo(() => {
     if (mode === "season") {
-      return computeSeasonRating(s, sid).map((r) => {
-        const u = s.users[r.uid];
-        return { uid: r.uid, nick: u?.nickname ?? "—", first: u?.firstName ?? "", last: u?.lastName ?? "", user: u!, points: r.points, games: r.games, wins: r.wins, top3: r.top3, ft: r.ft, best: r.best, kos: r.kos, rebs: r.rebs };
+      const rating = computeSeasonRating(users, tournaments, sid);
+      return rating.map((r) => {
+        const u = users[r.uid];
+        return { 
+          uid: r.uid, nick: u?.nickname ?? "—", first: u?.firstName ?? "", last: u?.lastName ?? "", 
+          user: u!, points: r.points, games: r.games, wins: r.wins, top3: r.top3, ft: r.ft, 
+          best: r.best, kos: r.kos, rebs: r.rebs 
+        };
       }).filter((r) => r.user);
     }
-    return Object.values(s.users).filter((u) => !u.isArchived).map((u) => ({
+    return Object.values(users).filter((u) => !u.isArchived).map((u) => ({
       uid: u.uid, nick: u.nickname, first: u.firstName, last: u.lastName, user: u,
       points: u.stats.points, games: u.stats.totalTournaments, wins: u.stats.wins, top3: u.stats.top3,
       ft: u.stats.finalTables, best: u.stats.bestScore, kos: u.stats.knockouts, rebs: u.stats.rebuy + u.stats.addon,
     }));
-  }, [mode, sid, s]);
+  }, [mode, sid, users, tournaments]);
 
   const sorted = [...rows].sort((a, b) => (((a as unknown as Record<string, number>)[sortK] ?? 0) - ((b as unknown as Record<string, number>)[sortK] ?? 0)) * dir);
   const TH = ({ k, children }: { k: string; children: React.ReactNode }) => (
@@ -183,7 +247,7 @@ export function AdminRating() {
           <div className="flex flex-wrap items-center gap-2">
             {mode === "season" && (
               <select className="inp !min-h-[40px] !w-auto !py-1.5 text-[13px]" value={sid} onChange={(e) => setSid(e.target.value)}>
-                {seasons.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+                {seasonsList.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
               </select>
             )}
             <div className="flex rounded-xl border border-line bg-white/[0.03] p-1">
@@ -223,13 +287,13 @@ export function AdminRating() {
     </div>
   );
 }
-
 /* ================================ ШАБЛОНЫ ================================ */
 export function Templates({ ro }: { ro: boolean }) {
-  const s = useDb();
+  const { templates } = useFirebaseData();
   const nav = useNavigate();
   const [delT, setDelT] = useState<string | null>(null);
-  const tpls = Object.values(s.templates);
+  const [loading, setLoading] = useState(false);
+  const tpls = Object.values(templates);
 
   return (
     <div>
@@ -271,7 +335,20 @@ export function Templates({ ro }: { ro: boolean }) {
         <p className="text-[13.5px] font-semibold text-mut">Шаблон будет удалён из библиотеки. Созданные по нему турниры останутся.</p>
         <div className="mt-5 flex justify-end gap-2">
           <Btn variant="ghost" onClick={() => setDelT(null)}>Отмена</Btn>
-          <Btn variant="danger" onClick={() => { if (delT) deleteTemplate(delT); setDelT(null); toast("Шаблон удалён", "info"); }}><Trash2 className="size-4" /> Удалить</Btn>
+          <Btn variant="danger" onClick={async () => { 
+            if (delT) { 
+              setLoading(true);
+              try {
+                await deleteTemplate(delT); 
+                setDelT(null); 
+                toast("Шаблон удалён", "info"); 
+              } catch (err: any) {
+                toast(err.message || "Ошибка", "err");
+              } finally {
+                setLoading(false);
+              }
+            } 
+          }} disabled={loading}><Trash2 className="size-4" /> Удалить</Btn>
         </div>
       </Modal>
     </div>
@@ -280,18 +357,19 @@ export function Templates({ ro }: { ro: boolean }) {
 
 /* ================================ СЕЗОНЫ ================================ */
 export function Seasons({ ro }: { ro: boolean }) {
-  const s = useDb();
+  const { seasons } = useFirebaseData();
   const nav = useNavigate();
   const [editS, setEditS] = useState<{ id: string | null; name: string; start: string; end: string; isActive: boolean } | null>(null);
   const [delS, setDelS] = useState<Season | null>(null);
-  const seasons = Object.values(s.seasons).sort((a, b) => Number(b.isActive) - Number(a.isActive) || b.startDate - a.startDate);
+  const [loading, setLoading] = useState(false);
+  const seasonsList = Object.values(seasons).sort((a, b) => Number(b.isActive) - Number(a.isActive) || b.startDate - a.startDate);
 
   return (
     <div>
       <SectionTitle kicker="Сезонная система" title="Сезоны"
         right={!ro && <Btn onClick={() => setEditS({ id: null, name: "", start: toISO(Date.now()), end: toISO(Date.now() + 180 * 86400e3), isActive: false })}><Plus className="size-4.5" /> Создать сезон</Btn>} />
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {seasons.map((x, i) => {
+        {seasonsList.map((x, i) => {
           const cnt = Object.keys(x.tournaments).length;
           return (
             <Reveal key={x.id} delay={i * 60} className="h-full">
@@ -305,10 +383,12 @@ export function Seasons({ ro }: { ro: boolean }) {
                 <p className="mt-3 text-[12.5px] font-semibold text-dim">{cnt} {plural(cnt, "турнир", "турнира", "турниров")} · финал: топ-{x.finalTable.places}{x.finalTable.finalTournamentId ? " · сформирован" : ""}</p>
                 <div className="mt-auto flex flex-wrap gap-2 pt-4">
                   <Btn size="sm" variant="soft" onClick={() => nav(`/app/seasons/${x.id}`)}>Страница сезона <ChevronRight className="size-4" /></Btn>
-                  {!ro && (<>
-                    <Btn size="sm" variant="dark" onClick={() => setEditS({ id: x.id, name: x.name, start: toISO(x.startDate), end: toISO(x.endDate), isActive: x.isActive })}><Pencil className="size-4" /></Btn>
-                    <Btn size="sm" variant="danger" onClick={() => setDelS(x)}><Trash2 className="size-4" /></Btn>
-                  </>)}
+                  {!ro && (
+                    <>
+                      <Btn size="sm" variant="dark" onClick={() => setEditS({ id: x.id, name: x.name, start: toISO(x.startDate), end: toISO(x.endDate), isActive: x.isActive })}><Pencil className="size-4" /></Btn>
+                      <Btn size="sm" variant="danger" onClick={() => setDelS(x)}><Trash2 className="size-4" /></Btn>
+                    </>
+                  )}
                 </div>
               </div>
             </Reveal>
@@ -327,48 +407,82 @@ export function Seasons({ ro }: { ro: boolean }) {
             <Toggle checked={editS.isActive} onChange={(v) => setEditS({ ...editS, isActive: v })} label="Активный сезон (остальные станут неактивными)" />
             <div className="flex justify-end gap-2">
               <Btn variant="ghost" onClick={() => setEditS(null)}>Отмена</Btn>
-              <Btn onClick={() => {
+              <Btn onClick={async () => {
                 if (!editS.name.trim()) { toast("Укажите название", "err"); return; }
-                saveSeason(editS.id, { name: editS.name.trim(), startDate: fromISO(editS.start), endDate: fromISO(editS.end), isActive: editS.isActive });
-                setEditS(null); toast("Сезон сохранён");
-              }}><Save className="size-4" /> Сохранить</Btn>
+                setLoading(true);
+                try {
+                  await saveSeason(editS.id, { 
+                    name: editS.name.trim(), 
+                    startDate: fromISO(editS.start), 
+                    endDate: fromISO(editS.end), 
+                    isActive: editS.isActive 
+                  });
+                  setEditS(null); 
+                  toast("Сезон сохранён");
+                } catch (err: any) {
+                  toast(err.message || "Ошибка", "err");
+                } finally {
+                  setLoading(false);
+                }
+              }} disabled={loading}><Save className="size-4" /> Сохранить</Btn>
             </div>
           </div>
         )}
       </Modal>
+      
       <Modal open={!!delS} onClose={() => setDelS(null)} title="Удалить сезон?" subtitle={delS?.name}>
         <p className="text-[13.5px] font-semibold text-mut">Турниры сезона сохранятся, но перестанут учитываться в сезонном рейтинге.</p>
         <div className="mt-5 flex justify-end gap-2">
           <Btn variant="ghost" onClick={() => setDelS(null)}>Отмена</Btn>
-          <Btn variant="danger" onClick={() => { if (delS) deleteSeason(delS.id); setDelS(null); toast("Сезон удалён", "info"); }}><Trash2 className="size-4" /> Удалить</Btn>
+          <Btn variant="danger" onClick={async () => { 
+            if (delS) { 
+              setLoading(true);
+              try {
+                await deleteSeason(delS.id); 
+                setDelS(null); 
+                toast("Сезон удалён", "info"); 
+              } catch (err: any) {
+                toast(err.message || "Ошибка", "err");
+              } finally {
+                setLoading(false);
+              }
+            } 
+          }} disabled={loading}><Trash2 className="size-4" /> Удалить</Btn>
         </div>
       </Modal>
     </div>
   );
-}
-
-export function SeasonPage({ sid, ro }: { sid: string; ro: boolean }) {
-  const s = useDb();
+}export function SeasonPage({ sid, ro }: { sid: string; ro: boolean }) {
+  const { users, tournaments, seasons, templates } = useFirebaseData();
   const nav = useNavigate();
-  const season = s.seasons[sid];
-  const [tplId, setTplId] = useState(Object.keys(s.templates)[0] ?? "");
+  const [loading, setLoading] = useState(false);
+  const season = seasons[sid];
+  const [tplId, setTplId] = useState(Object.keys(templates)[0] ?? "");
   const [manualUid, setManualUid] = useState("");
+  
   if (!season) return <Empty title="Сезон не найден" />;
 
   const tIds = Object.keys(season.tournaments);
-  const list = tIds.map((id) => s.tournaments[id]).filter(Boolean);
+  const list = tIds.map((id) => tournaments[id]).filter(Boolean);
   const played = list.filter((t) => t.status === "completed").length;
   const live = list.filter((t) => t.status === "active").length;
   const planned = list.filter((t) => t.status === "planned").length;
-  const rating = computeSeasonRating(s, sid);
+  const rating = computeSeasonRating(users, tournaments, sid);
   const leader = rating[0];
-  const pool = Object.values(s.users).filter((u) => !u.isArchived && !u.isBlocked && !season.finalTable.manualPlayers.includes(u.uid));
+  const pool = Object.values(users).filter((u) => !u.isArchived && !u.isBlocked && !season.finalTable.manualPlayers.includes(u.uid));
 
-  const doForm = () => {
-    const err = formFinal(sid, tplId);
-    if (err) { toast(err, "err"); return; }
-    toast("Финальный турнир сформирован — участники зарегистрированы автоматически");
-    nav("/app/tournaments");
+  const doForm = async () => {
+    setLoading(true);
+    try {
+      const err = await formFinal(sid, tplId);
+      if (err) { toast(err, "err"); return; }
+      toast("Финальный турнир сформирован — участники зарегистрированы автоматически");
+      nav("/app/tournaments");
+    } catch (err: any) {
+      toast(err.message || "Ошибка", "err");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -379,7 +493,7 @@ export function SeasonPage({ sid, ro }: { sid: string; ro: boolean }) {
 
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <Reveal><div className="panel p-4"><p className="lbl">Сыграно турниров</p><p className="num mt-1 text-[26px] font-extrabold text-(--acc)">{played}</p><p className="text-[11.5px] font-bold text-dim">в игре: {live} · в плане: {planned}</p></div></Reveal>
-        <Reveal delay={60}><div className="panel p-4"><p className="lbl">Лидер сезона</p><p className="mt-1 truncate font-display text-[17px] font-extrabold">{leader ? s.users[leader.uid]?.nickname : "—"}</p><p className="text-[11.5px] font-bold text-dim">{leader ? `${fmtNum(leader.points)} очков · ${leader.games} игр` : "нет результатов"}</p></div></Reveal>
+        <Reveal delay={60}><div className="panel p-4"><p className="lbl">Лидер сезона</p><p className="mt-1 truncate font-display text-[17px] font-extrabold">{leader ? users[leader.uid]?.nickname : "—"}</p><p className="text-[11.5px] font-bold text-dim">{leader ? `${fmtNum(leader.points)} очков · ${leader.games} игр` : "нет результатов"}</p></div></Reveal>
         <Reveal delay={120}><div className="panel p-4"><p className="lbl">Участников в зачёте</p><p className="num mt-1 text-[26px] font-extrabold text-(--acc)">{rating.length}</p><p className="text-[11.5px] font-bold text-dim">набрали очки в сезоне</p></div></Reveal>
         <Reveal delay={180}><div className="panel p-4"><p className="lbl">Финальный стол</p><p className="num mt-1 text-[26px] font-extrabold text-(--acc)">топ-{season.finalTable.places}</p><p className="text-[11.5px] font-bold text-dim">{season.finalTable.finalTournamentId ? "турнир сформирован" : "+ проходки вручную"}</p></div></Reveal>
       </div>
@@ -392,8 +506,8 @@ export function SeasonPage({ sid, ro }: { sid: string; ro: boolean }) {
               {rating.slice(0, 10).map((r, i) => (
                 <div key={r.uid} className="flex items-center gap-3 rounded-xl px-2.5 py-2 hover:bg-white/[0.04]">
                   <span className={cn("num w-7 text-center font-display text-[14px] font-extrabold", i === 0 ? "text-[#ffd76a]" : i < 3 ? "text-(--acc)" : "text-dim")}>{i + 1}</span>
-                  <Avatar user={s.users[r.uid]} size={32} />
-                  <span className="min-w-0 flex-1 truncate text-[13px] font-bold">{s.users[r.uid]?.nickname}{i < season.finalTable.places && <Badge tone="acc" className="ml-2">финал</Badge>}</span>
+                  <Avatar user={users[r.uid]} size={32} />
+                  <span className="min-w-0 flex-1 truncate text-[13px] font-bold">{users[r.uid]?.nickname}{i < season.finalTable.places && <Badge tone="acc" className="ml-2">финал</Badge>}</span>
                   <span className="num text-[13.5px] font-extrabold text-(--acc)">{fmtNum(r.points)}</span>
                 </div>
               ))}
@@ -426,7 +540,16 @@ export function SeasonPage({ sid, ro }: { sid: string; ro: boolean }) {
               <div className="relative mt-3 space-y-3.5">
                 <Field label="Сколько мест попадает за финальный стол">
                   <input type="number" className="inp" value={season.finalTable.places} disabled={ro}
-                    onChange={(e) => setSeasonFinal(sid, { places: Math.max(2, +e.target.value || 9) })} />
+                    onChange={async (e) => { 
+                      setLoading(true);
+                      try {
+                        await setSeasonFinal(sid, { places: Math.max(2, +e.target.value || 9) });
+                      } catch (err: any) {
+                        toast(err.message || "Ошибка", "err");
+                      } finally {
+                        setLoading(false);
+                      }
+                    }} />
                 </Field>
                 <Field label="Проходки вручную" hint="Игроки попадут в финал вне зависимости от рейтинга">
                   <div className="flex gap-2">
@@ -434,27 +557,46 @@ export function SeasonPage({ sid, ro }: { sid: string; ro: boolean }) {
                       <option value="">— выбрать игрока —</option>
                       {pool.map((u) => <option key={u.uid} value={u.uid}>{u.nickname}</option>)}
                     </select>
-                    <Btn variant="soft" disabled={ro || !manualUid} onClick={() => { setSeasonFinal(sid, { manualPlayers: [...season.finalTable.manualPlayers, manualUid] }); setManualUid(""); }}><Plus className="size-4" /></Btn>
+                    <Btn variant="soft" disabled={ro || !manualUid || loading} onClick={async () => { 
+                      setLoading(true);
+                      try {
+                        await setSeasonFinal(sid, { manualPlayers: [...season.finalTable.manualPlayers, manualUid] });
+                        setManualUid("");
+                      } catch (err: any) {
+                        toast(err.message || "Ошибка", "err");
+                      } finally {
+                        setLoading(false);
+                      }
+                    }}><Plus className="size-4" /></Btn>
                   </div>
                 </Field>
                 {season.finalTable.manualPlayers.length > 0 && (
                   <div className="flex flex-wrap gap-1.5">
                     {season.finalTable.manualPlayers.map((u) => (
                       <span key={u} className="inline-flex items-center gap-1.5 rounded-lg bg-(--acc-soft) px-2.5 py-1.5 text-[12px] font-extrabold text-(--acc)">
-                        {s.users[u]?.nickname ?? u}
-                        {!ro && <button onClick={() => setSeasonFinal(sid, { manualPlayers: season.finalTable.manualPlayers.filter((x) => x !== u) })}><X className="size-3.5" /></button>}
+                        {users[u]?.nickname ?? u}
+                        {!ro && <button onClick={async () => { 
+                          setLoading(true);
+                          try {
+                            await setSeasonFinal(sid, { manualPlayers: season.finalTable.manualPlayers.filter((x) => x !== u) });
+                          } catch (err: any) {
+                            toast(err.message || "Ошибка", "err");
+                          } finally {
+                            setLoading(false);
+                          }
+                        }}><X className="size-3.5" /></button>}
                       </span>
                     ))}
                   </div>
                 )}
                 <Select label="Шаблон финального турнира" value={tplId} onChange={setTplId}
-                  options={Object.values(s.templates).map((t) => ({ v: t.id, l: t.name }))} />
-                {season.finalTable.finalTournamentId && s.tournaments[season.finalTable.finalTournamentId] ? (
+                  options={Object.values(templates).map((t) => ({ v: t.id, l: t.name }))} />
+                {season.finalTable.finalTournamentId && tournaments[season.finalTable.finalTournamentId] ? (
                   <Btn variant="soft" className="w-full" onClick={() => nav(`/app/tournaments/${season.finalTable.finalTournamentId}/seats`)}>
-                    Финал сформирован: «{s.tournaments[season.finalTable.finalTournamentId].name}» <ChevronRight className="size-4" />
+                    Финал сформирован: «{tournaments[season.finalTable.finalTournamentId].name}» <ChevronRight className="size-4" />
                   </Btn>
                 ) : (
-                  <Btn className="w-full" disabled={ro || !tplId} onClick={doForm}><Sparkles className="size-4.5" /> Сформировать финальный турнир</Btn>
+                  <Btn className="w-full" disabled={ro || !tplId || loading} onClick={doForm}><Sparkles className="size-4.5" /> Сформировать финальный турнир</Btn>
                 )}
               </div>
             </div>
@@ -467,22 +609,25 @@ export function SeasonPage({ sid, ro }: { sid: string; ro: boolean }) {
 
 /* ================================ ЭКРАНЫ ================================ */
 export function ScreensAdmin({ ro }: { ro: boolean }) {
-  const s = useDb();
+  const { tournaments, screens } = useFirebaseData();
+  const [loading, setLoading] = useState(false);
+  
   const defs = [
     { key: "main", title: "Основной экран", desc: "Турнир, блайнды и таймер + бегущая строка", url: (id: string) => `#/screen/main/${id}`, type: "main" },
     { key: "final", title: "Финальный стол", desc: "9 игроков с аватарами и стеками", url: (id: string) => `#/screen/final/${id}`, type: "final-table" },
     { key: "results", title: "Итоги турнира", desc: "Победитель и топ-10 с очками", url: (id: string) => `#/screen/results/${id}`, type: "results" },
     { key: "ranking", title: "Рейтинг клуба", desc: "Топ-20 игроков, автообновление", url: () => "#/screen/ranking", type: "ranking" },
   ];
-  const ts = Object.values(s.tournaments);
+  const ts = Object.values(tournaments);
+  
   return (
     <div>
       <SectionTitle kicker="ТВ-мониторы клуба" title="Экраны" right={<Badge tone="mut">обновление в реальном времени</Badge>} />
       <div className="grid gap-4 md:grid-cols-2">
         {defs.map((d, i) => {
-          const cfg = s.screens[d.key];
+          const cfg = screens[d.key];
           const tid = cfg?.tournamentId ?? ts.find((t) => t.status === "active")?.id ?? ts[0]?.id ?? "";
-          const t = s.tournaments[tid];
+          const t = tournaments[tid];
           return (
             <Reveal key={d.key} delay={i * 70} className="h-full">
               <div className="panel flex h-full flex-col p-5">
@@ -493,14 +638,25 @@ export function ScreensAdmin({ ro }: { ro: boolean }) {
                   </div>
                   <span className="grid size-10 place-items-center rounded-xl bg-(--acc-soft) text-(--acc) ring-1 ring-(--acc-line)"><MonitorPlay className="size-5" /></span>
                 </div>
-                {/* mini preview */}
                 <div className="felt stitched mt-4 flex items-center justify-between rounded-xl px-4 py-3">
                   <span className="text-[11px] font-extrabold uppercase tracking-widest text-white/60">{d.type}</span>
                   <span className="num text-[17px] font-extrabold text-[#ffd76a]">{d.key === "ranking" ? "ТОП-20" : t ? `${t.pult.currentLevel} ур. · ${fmtNum(t.startingStack)}` : "—"}</span>
                 </div>
                 <div className="mt-4 space-y-3">
                   {d.key !== "ranking" && (
-                    <Select label="Какой турнир транслировать" value={tid} onChange={(v) => { if (!ro) setScreen(d.key, { type: d.type, tournamentId: v }); }}
+                    <Select label="Какой турнир транслировать" value={tid} 
+                      onChange={async (v) => { 
+                        if (!ro) {
+                          setLoading(true);
+                          try {
+                            await setScreen(d.key, { type: d.type, tournamentId: v });
+                          } catch (err: any) {
+                            toast(err.message || "Ошибка", "err");
+                          } finally {
+                            setLoading(false);
+                          }
+                        }
+                      }}
                       options={ts.map((x) => ({ v: x.id, l: `${x.name} · ${x.status === "active" ? "LIVE" : x.status === "planned" ? "скоро" : "завершён"}` }))} />
                   )}
                   <a href={d.url(tid)} className="flex items-center justify-center gap-2 rounded-xl border border-(--acc-line)/60 bg-(--acc-soft) px-4 py-2.5 text-[13.5px] font-extrabold text-(--acc) transition hover:brightness-125">
@@ -516,12 +672,12 @@ export function ScreensAdmin({ ro }: { ro: boolean }) {
     </div>
   );
 }
-
 /* ================================ НАСТРОЙКИ ================================ */
 export function SettingsPage() {
-  const s = useDb();
+  const { club, achievements, users } = useFirebaseData();
   const [achEdit, setAchEdit] = useState<{ id: string | null; name: string; description: string; icon: string; conditionType: CondType; threshold: number } | null>(null);
   const [delAch, setDelAch] = useState<Achievement | null>(null);
+  const [loading, setLoading] = useState(false);
 
   return (
     <div>
@@ -532,11 +688,36 @@ export function SettingsPage() {
           <div className="panel p-5">
             <p className="lbl flex items-center gap-2"><Flag className="size-4 text-(--acc)" /> Бренд клуба</p>
             <div className="mt-3 space-y-3.5">
-              <Field label="Название клуба"><input className="inp" defaultValue={s.club.name} onBlur={(e) => { updateClub({ name: e.target.value || s.club.name }); toast("Название обновлено"); }} /></Field>
-              <Field label="Слоган" hint="Попадает в бегущую строку на ТВ-экранах">
-                <textarea className="inp min-h-[70px]" defaultValue={s.club.slogan} onBlur={(e) => { updateClub({ slogan: e.target.value }); toast("Слоган обновлён"); }} />
+              <Field label="Название клуба">
+                <input className="inp" defaultValue={club?.name || ""} 
+                  onBlur={async (e) => { 
+                    try {
+                      await updateClub({ name: e.target.value || club?.name || "" }); 
+                      toast("Название обновлено"); 
+                    } catch (err: any) {
+                      toast(err.message || "Ошибка", "err");
+                    }
+                  }} />
               </Field>
-              <Select label="Язык интерфейса" value={s.club.language} onChange={(v) => updateClub({ language: v as "ru" | "en" })}
+              <Field label="Слоган" hint="Попадает в бегущую строку на ТВ-экранах">
+                <textarea className="inp min-h-[70px]" defaultValue={club?.slogan || ""} 
+                  onBlur={async (e) => { 
+                    try {
+                      await updateClub({ slogan: e.target.value }); 
+                      toast("Слоган обновлён"); 
+                    } catch (err: any) {
+                      toast(err.message || "Ошибка", "err");
+                    }
+                  }} />
+              </Field>
+              <Select label="Язык интерфейса" value={club?.language || "ru"} 
+                onChange={async (v) => { 
+                  try {
+                    await updateClub({ language: v as "ru" | "en" }); 
+                  } catch (err: any) {
+                    toast(err.message || "Ошибка", "err");
+                  }
+                }}
                 options={[{ v: "ru", l: "Русский" }, { v: "en", l: "English" }]} />
             </div>
           </div>
@@ -550,36 +731,59 @@ export function SettingsPage() {
               <p className="mt-1 text-[12.5px] text-mut">Применяется сразу: кнопки, акценты, ТВ-экраны</p>
               <div className="mt-3.5 flex flex-wrap gap-2.5">
                 {Object.entries(ACCENTS).map(([k, a]) => (
-                  <button key={k} onClick={() => { updateClub({ activeColor: k }); toast(`Акцент: ${a.name}`); }}
+                  <button key={k} onClick={async () => { 
+                    try {
+                      await updateClub({ activeColor: k }); 
+                      toast(`Акцент: ${a.name}`); 
+                    } catch (err: any) {
+                      toast(err.message || "Ошибка", "err");
+                    }
+                  }}
                     className={cn("flex items-center gap-2 rounded-xl border px-3.5 py-2.5 text-[12.5px] font-extrabold transition-all",
-                      s.club.activeColor === k ? "border-(--acc-line) bg-(--acc-soft)" : "border-line bg-white/[0.03] hover:bg-white/[0.07]")}>
+                      club?.activeColor === k ? "border-(--acc-line) bg-(--acc-soft)" : "border-line bg-white/[0.03] hover:bg-white/[0.07]")}>
                     <span className="size-4.5 rounded-full" style={{ background: a.hex }} /> {a.name}
                   </button>
                 ))}
               </div>
             </div>
           </Reveal>
+          
           {/* bg */}
           <Reveal delay={120}>
             <div className="panel p-5">
               <p className="lbl flex items-center gap-2"><LayoutGrid className="size-4 text-(--acc)" /> Цвет фона платформы</p>
               <div className="mt-3.5 flex flex-wrap gap-2.5">
                 {BGS.map((b) => (
-                  <button key={b.hex} onClick={() => { updateClub({ bgColor: b.hex }); toast(`Фон: ${b.name}`); }}
+                  <button key={b.hex} onClick={async () => { 
+                    try {
+                      await updateClub({ bgColor: b.hex }); 
+                      toast(`Фон: ${b.name}`); 
+                    } catch (err: any) {
+                      toast(err.message || "Ошибка", "err");
+                    }
+                  }}
                     className={cn("flex items-center gap-2 rounded-xl border px-3.5 py-2.5 text-[12.5px] font-extrabold transition-all",
-                      s.club.bgColor === b.hex ? "border-(--acc-line) bg-(--acc-soft)" : "border-line bg-white/[0.03] hover:bg-white/[0.07]")}>
+                      club?.bgColor === b.hex ? "border-(--acc-line) bg-(--acc-soft)" : "border-line bg-white/[0.03] hover:bg-white/[0.07]")}>
                     <span className="size-4.5 rounded-full ring-1 ring-white/25" style={{ background: b.hex }} /> {b.name}
                   </button>
                 ))}
               </div>
             </div>
           </Reveal>
+          
           {/* sound */}
           <Reveal delay={180}>
             <div className="panel p-5">
               <div className="flex items-center justify-between">
-                <p className="lbl !mb-0 flex items-center gap-2">{s.club.sound ? <Volume2 className="size-4 text-(--acc)" /> : <VolumeX className="size-4 text-dim" />} Звуковое сопровождение</p>
-                <Toggle checked={s.club.sound} onChange={(v) => { updateClub({ sound: v }); if (v) setTimeout(() => updateClub({ sound: true }), 0); }} />
+                <p className="lbl !mb-0 flex items-center gap-2">{club?.sound ? <Volume2 className="size-4 text-(--acc)" /> : <VolumeX className="size-4 text-dim" />} Звуковое сопровождение</p>
+                <Toggle checked={club?.sound || false} onChange={async (v) => { 
+                  try {
+                    await updateClub({ sound: v }); 
+                    if (v) setTimeout(() => updateClub({ sound: true }), 0); 
+                  } catch (err: any) {
+                    toast(err.message || "Ошибка", "err");
+                  }
+                }} />
               </div>
               <p className="mt-2 text-[12.5px] leading-relaxed text-mut">Смена уровня, нокаут, бонус, ребай и победа озвучиваются на пульте и в кабинетах. Звуки синтезируются Web Audio API — файлы не нужны.</p>
               <div className="mt-3 flex flex-wrap gap-1.5">
@@ -598,7 +802,7 @@ export function SettingsPage() {
             </div>
             <p className="mt-2 text-[12.5px] text-mut">Присваиваются автоматически после каждого завершённого турнира, когда показатель достигает порога.</p>
             <div className="mt-3 space-y-2">
-              {Object.values(s.achievements).map((a) => (
+              {Object.values(achievements).map((a) => (
                 <div key={a.id} className="flex items-center gap-3 rounded-xl bg-white/[0.03] px-3 py-2.5">
                   <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-(--acc-soft) text-(--acc)"><AchIcon name={a.icon} className="size-4.5" /></span>
                   <span className="min-w-0 flex-1">
@@ -620,12 +824,26 @@ export function SettingsPage() {
               <p className="lbl flex items-center gap-2"><ShieldCheck className="size-4 text-(--acc)" /> Роли и операторы</p>
               <p className="mt-1 text-[12.5px] text-mut">Оператор ведёт пульт и турниры, остальные разделы — только просмотр.</p>
               <div className="mt-3 max-h-[260px] space-y-1.5 overflow-y-auto pr-1">
-                {Object.values(s.users).filter((u) => !u.isArchived).sort((a, b) => a.nickname.localeCompare(b.nickname)).map((u) => (
+                {Object.values(users).filter((u) => !u.isArchived).sort((a, b) => a.nickname.localeCompare(b.nickname)).map((u) => (
                   <div key={u.uid} className="flex items-center gap-2.5 rounded-xl bg-white/[0.03] px-2.5 py-2">
                     <Avatar user={u} size={30} />
                     <span className="min-w-0 flex-1 truncate text-[12.5px] font-bold">{u.nickname}</span>
                     <select className="inp !min-h-[34px] !w-auto !rounded-lg !px-2 !py-1 text-[12px] font-bold" value={u.role}
-                      onChange={(e) => { adminSaveUser(u.uid, { nickname: u.nickname, firstName: u.firstName, lastName: u.lastName, email: u.email, phone: u.phone, role: e.target.value as Role, startPoints: 0, hue: u.hue }); toast(`${u.nickname}: роль «${ROLE_LABEL[e.target.value as Role]}»`); }}>
+                      onChange={async (e) => { 
+                        setLoading(true);
+                        try {
+                          await adminSaveUser(u.uid, { 
+                            nickname: u.nickname, firstName: u.firstName, lastName: u.lastName, 
+                            email: u.email, phone: u.phone, role: e.target.value as Role, 
+                            startPoints: 0, hue: u.hue 
+                          }); 
+                          toast(`${u.nickname}: роль «${ROLE_LABEL[e.target.value as Role]}»`); 
+                        } catch (err: any) {
+                          toast(err.message || "Ошибка", "err");
+                        } finally {
+                          setLoading(false);
+                        }
+                      }}>
                       <option value="player">Игрок</option><option value="operator">Оператор</option><option value="admin">Админ</option>
                     </select>
                   </div>
@@ -633,11 +851,19 @@ export function SettingsPage() {
               </div>
             </div>
           </Reveal>
+          
           <Reveal delay={220}>
             <div className="panel border-bad/25 p-5">
               <p className="lbl flex items-center gap-2"><RotateCcw className="size-4 text-bad" /> Демо-данные</p>
               <p className="mt-1 text-[12.5px] text-mut">Вернуть платформу к исходному состоянию — все изменения будут потеряны.</p>
-              <Btn variant="danger" size="sm" className="mt-3" onClick={() => { resetDemo(); toast("Демо-данные восстановлены", "info"); }}><RotateCcw className="size-4" /> Сбросить данные</Btn>
+              <Btn variant="danger" size="sm" className="mt-3" onClick={async () => { 
+                try {
+                  await resetDemo(); 
+                  toast("Демо-данные восстановлены", "info"); 
+                } catch (err: any) {
+                  toast(err.message || "Ошибка", "err");
+                }
+              }}><RotateCcw className="size-4" /> Сбросить данные</Btn>
             </div>
           </Reveal>
         </div>
@@ -665,20 +891,46 @@ export function SettingsPage() {
             </Field>
             <div className="flex justify-end gap-2">
               <Btn variant="ghost" onClick={() => setAchEdit(null)}>Отмена</Btn>
-              <Btn onClick={() => {
+              <Btn onClick={async () => {
                 if (!achEdit.name.trim()) { toast("Укажите название", "err"); return; }
-                saveAchievement(achEdit.id, { name: achEdit.name.trim(), description: achEdit.description, icon: achEdit.icon, conditionType: achEdit.conditionType, threshold: achEdit.threshold });
-                setAchEdit(null); toast("Достижение сохранено");
-              }}><Save className="size-4" /> Сохранить</Btn>
+                setLoading(true);
+                try {
+                  await saveAchievement(achEdit.id, { 
+                    name: achEdit.name.trim(), description: achEdit.description, 
+                    icon: achEdit.icon, conditionType: achEdit.conditionType, 
+                    threshold: achEdit.threshold 
+                  });
+                  setAchEdit(null); 
+                  toast("Достижение сохранено");
+                } catch (err: any) {
+                  toast(err.message || "Ошибка", "err");
+                } finally {
+                  setLoading(false);
+                }
+              }} disabled={loading}><Save className="size-4" /> Сохранить</Btn>
             </div>
           </div>
         )}
       </Modal>
+      
       <Modal open={!!delAch} onClose={() => setDelAch(null)} title="Удалить достижение?" subtitle={delAch?.name}>
         <p className="text-[13.5px] font-semibold text-mut">Уже полученные игроками награды с этим названием останутся в их витринах.</p>
         <div className="mt-5 flex justify-end gap-2">
           <Btn variant="ghost" onClick={() => setDelAch(null)}>Отмена</Btn>
-          <Btn variant="danger" onClick={() => { if (delAch) deleteAchievement(delAch.id); setDelAch(null); toast("Удалено", "info"); }}><Trash2 className="size-4" /> Удалить</Btn>
+          <Btn variant="danger" onClick={async () => { 
+            if (delAch) { 
+              setLoading(true);
+              try {
+                await deleteAchievement(delAch.id); 
+                setDelAch(null); 
+                toast("Удалено", "info"); 
+              } catch (err: any) {
+                toast(err.message || "Ошибка", "err");
+              } finally {
+                setLoading(false);
+              }
+            } 
+          }} disabled={loading}><Trash2 className="size-4" /> Удалить</Btn>
         </div>
       </Modal>
     </div>

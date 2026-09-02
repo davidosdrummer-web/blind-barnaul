@@ -2,8 +2,11 @@ import { ReactNode, useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { Maximize, Minimize, Timer, Coins, Users, Skull, Crown, Coffee } from "lucide-react";
 import {
-  useDb, Root, fmtClock, fmtNum, levelInfo, nextLevelOf, bankChips, computeSeasonRating,
-  fmtDate, plural,
+  useFirebaseData
+} from "../lib/useFirebaseData";
+import {
+  fmtClock, fmtNum, levelInfo, nextLevelOf, chipsInPlay,
+  fmtDate, plural, computeSeasonRating,
 } from "../lib/db";
 import { Avatar, Confetti, Marquee, Suit, cn } from "../lib/ui";
 
@@ -24,10 +27,11 @@ function useFullscreen() {
 }
 
 function TvFrame({ children, right }: { children: ReactNode; right?: ReactNode }) {
-  const s = useDb();
+  const { club } = useFirebaseData();
   const { fs, toggle } = useFullscreen();
   const [nowT, setNowT] = useState(new Date());
   useEffect(() => { const i = setInterval(() => setNowT(new Date()), 1000); return () => clearInterval(i); }, []);
+  
   return (
     <div className="relative flex min-h-screen flex-col overflow-hidden">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(70%_50%_at_50%_-5%,var(--acc-soft),transparent_60%)]" />
@@ -36,7 +40,7 @@ function TvFrame({ children, right }: { children: ReactNode; right?: ReactNode }
           <Suit s="spade" className="size-6 text-(--acc)" />
         </span>
         <div>
-          <p className="font-display text-[17px] font-extrabold tracking-wide lg:text-[20px]">{s.club.name}</p>
+          <p className="font-display text-[17px] font-extrabold tracking-wide lg:text-[20px]">{club?.name || "Клуб"}</p>
           <p className="text-[11px] font-bold uppercase tracking-[0.26em] text-dim">клуб спортивного покера</p>
         </div>
         <div className="ml-auto flex items-center gap-4">
@@ -52,7 +56,7 @@ function TvFrame({ children, right }: { children: ReactNode; right?: ReactNode }
       <main className="relative z-10 flex-1 px-6 pb-4 lg:px-10">{children}</main>
       <footer className="relative z-10 border-t border-line bg-black/30 py-3.5 backdrop-blur-sm">
         <div className="text-[15px] font-bold tracking-wide text-mut">
-          <Marquee text={s.club.slogan} speed={30} />
+          <Marquee text={club?.slogan || "Клуб спортивного покера"} speed={30} />
         </div>
       </footer>
     </div>
@@ -60,29 +64,29 @@ function TvFrame({ children, right }: { children: ReactNode; right?: ReactNode }
 }
 
 function useTournament(screenKey?: "main" | "final" | "results") {
-  const s = useDb();
+  const { tournaments, screens } = useFirebaseData();
   const { tid } = useParams();
-  const cfgId = screenKey ? s.screens[screenKey]?.tournamentId : undefined;
-  const all = Object.values(s.tournaments);
-  // приоритет: турнир из URL → выбранный админом в разделе «Экраны» → активный → завершённый с итогами
-  const t = s.tournaments[tid ?? ""]
-    ?? (cfgId ? s.tournaments[cfgId] : undefined)
+  const cfgId = screenKey ? screens[screenKey]?.tournamentId : undefined;
+  const all = Object.values(tournaments);
+  
+  const t = tournaments[tid ?? ""]
+    ?? (cfgId ? tournaments[cfgId] : undefined)
     ?? all.find((x) => x.status === "active")
     ?? all.find((x) => x.status === "completed" && x.results)
     ?? all[0];
-  return { s, t };
+  return { tournaments, t };
 }
 
 /* ================================ MAIN SCREEN ================================ */
 export function TvMain() {
-  const { s, t } = useTournament("main");
+  const { t } = useTournament("main");
   if (!t) return <TvFrame><p className="grid h-full place-items-center font-display text-2xl text-mut">Нет турниров</p></TvFrame>;
+  
   const info = levelInfo(t);
   const next = nextLevelOf(t);
   const running = t.pult.timerStarted && !t.pult.timerPaused;
   const left = Object.values(t.registeredPlayers).filter((r) => !r.isEliminated).length;
   const afterBreak = t.structure.breaks.find((b) => b.afterLevel === t.pult.currentLevel) ?? null;
-  // под таймером — блайнды идущего уровня; на перерыве — уровня, на котором возобновится игра
   const dispLv = t.pult.currentBreak ? (next ?? info.lv) : info.lv;
   const dur = (t.pult.currentBreak ? (afterBreak?.duration ?? 10) : info.lv.duration) * 60;
 
@@ -99,7 +103,6 @@ export function TvMain() {
             <div className="absolute inset-x-0 top-0 h-[3px] bg-(--acc-soft)">
               <div className="h-full bg-(--acc) transition-all duration-1000 ease-linear" style={{ width: `${(t.pult.timeRemaining / dur) * 100}%` }} />
             </div>
-            {/* сверху: статус уровня + что дальше */}
             <div className="flex flex-wrap items-center justify-center gap-2">
               <span key={String(t.pult.currentBreak) + info.idx}
                 className={cn("anim-pop rounded-full px-4 py-1.5 text-[13px] font-extrabold uppercase tracking-[0.22em]",
@@ -126,7 +129,6 @@ export function TvMain() {
               style={{ fontSize: "clamp(78px, 10vw, 164px)" }}>
               {fmtClock(t.pult.timeRemaining)}
             </p>
-            {/* под таймером: блайнды текущего уровня (на перерыве — уровня, на котором возобновится игра) */}
             <div key={"bl" + dispLv.level + String(t.pult.currentBreak)} className="anim-pop mx-auto mt-5 grid w-fit grid-cols-3 items-stretch gap-2.5 sm:gap-4">
               {[
                 { l: "МБ", v: fmtNum(dispLv.sb) },
@@ -149,9 +151,9 @@ export function TvMain() {
           <div className="flex h-full flex-col gap-3.5">
             <div className="grid flex-1 grid-cols-2 grid-rows-2 gap-3.5">
               {([
-                { icon: <Coins className="size-5.5" />, l: "Фишек в игре", v: fmtNum(bankChips(t)), suit: "spade" as const },
+                { icon: <Coins className="size-5.5" />, l: "Фишек в игре", v: fmtNum(chipsInPlay(t)), suit: "spade" as const },
                 { icon: <Users className="size-5.5" />, l: "В игре", v: `${left} / ${Object.keys(t.registeredPlayers).length}`, suit: "heart" as const },
-                { icon: <Timer className="size-5.5" />, l: "Средний стек", v: fmtNum(left ? Math.round(bankChips(t) / left) : 0), suit: "diamond" as const },
+                { icon: <Timer className="size-5.5" />, l: "Средний стек", v: fmtNum(left ? Math.round(chipsInPlay(t) / left) : 0), suit: "diamond" as const },
                 { icon: <Skull className="size-5.5" />, l: "Нокаутов", v: String(t.pult.knockouts), suit: "club" as const },
               ]).map((x, i) => (
                 <div key={x.l}
@@ -173,15 +175,19 @@ export function TvMain() {
     </TvFrame>
   );
 }
+
 /* ================================ FINAL TABLE ================================ */
 const SEAT_POS = [
   { x: 50, y: 93 }, { x: 24, y: 85 }, { x: 76, y: 85 },
   { x: 6, y: 62 }, { x: 94, y: 62 }, { x: 6, y: 26 }, { x: 94, y: 26 },
   { x: 30, y: 5 }, { x: 70, y: 5 },
 ];
+
 export function TvFinal() {
-  const { s, t } = useTournament("final");
+  const { tournaments, users } = useFirebaseData();
+  const { t } = useTournament("final");
   if (!t) return <TvFrame><p className="grid h-full place-items-center font-display text-2xl text-mut">Нет турниров</p></TvFrame>;
+  
   const regs = Object.entries(t.registeredPlayers).filter(([, r]) => !r.isEliminated).sort((a, b) => b[1].chips - a[1].chips);
   const totalLeft = regs.length;
   const isFinal = totalLeft <= t.finalTablePlayers;
@@ -196,19 +202,18 @@ export function TvFinal() {
           {isFinal ? `топ-${t.finalTablePlayers} · битва за титул` : `в игре ${totalLeft} — до финального стола осталось ${totalLeft - t.finalTablePlayers} ${plural(totalLeft - t.finalTablePlayers, "игрок", "игрока", "игроков")}`}
         </p>
         <div className="relative mx-auto mt-4 w-full max-w-[1200px]" style={{ aspectRatio: "16/8.4" }}>
-          {/* felt */}
           <div className="felt stitched absolute left-[13%] right-[13%] top-[16%] bottom-[16%] rounded-[50%]">
             <div className="absolute inset-0 grid place-items-center">
               <div className="text-center">
                 <Suit s="spade" className="mx-auto size-10 text-white/25" />
-                <p className="num mt-2 text-[clamp(15px,1.6vw,24px)] font-extrabold text-white/80">{fmtNum(bankChips(t))} фишек</p>
+                <p className="num mt-2 text-[clamp(15px,1.6vw,24px)] font-extrabold text-white/80">{fmtNum(chipsInPlay(t))} фишек</p>
                 <p className="text-[11px] font-extrabold uppercase tracking-[0.24em] text-white/40">в банке турнира</p>
               </div>
             </div>
           </div>
           {SEAT_POS.map((pos, i) => {
             const entry = shown[i];
-            const u = entry ? s.users[entry[0]] : null;
+            const u = entry ? users[entry[0]] : null;
             const reg = entry ? entry[1] : null;
             return (
               <div key={i} className="absolute -translate-x-1/2 -translate-y-1/2 text-center transition-all duration-700" style={{ left: `${pos.x}%`, top: `${pos.y}%` }}>
@@ -239,16 +244,17 @@ export function TvFinal() {
 
 /* ================================ RESULTS ================================ */
 export function TvResults() {
-  const { s, t } = useTournament("results");
+  const { tournaments, users } = useFirebaseData();
+  const { t } = useTournament("results");
   if (!t || !t.results) return <TvFrame><p className="grid h-full place-items-center font-display text-2xl text-mut">Итоги появятся после завершения турнира</p></TvFrame>;
-  const winner = s.users[t.results.winner];
+  
+  const winner = users[t.results.winner];
   const top = t.results.ranking.slice(0, 10);
 
   return (
     <TvFrame right={<span className="rounded-full bg-(--acc-soft) px-4 py-1.5 text-[13px] font-extrabold uppercase tracking-widest text-(--acc)">Итоги турнира</span>}>
       <Confetti count={54} />
       <div className="mx-auto grid h-full max-w-[1400px] items-center gap-8 py-4 lg:grid-cols-[1fr_1.1fr]">
-        {/* winner */}
         <div className="text-center">
           <Crown className="mx-auto size-14 text-[#ffd76a] drop-shadow-[0_0_28px_rgba(255,215,106,0.55)]" />
           <p className="mt-3 text-[13px] font-extrabold uppercase tracking-[0.34em] text-[#ffd76a]">Победитель турнира</p>
@@ -258,12 +264,11 @@ export function TvResults() {
           <p className="mt-5 text-[14px] font-bold uppercase tracking-[0.2em] text-dim">«{t.name}» · {fmtDate(t.results.completedAt)}</p>
           <p className="num mt-2 text-[24px] font-extrabold text-(--acc)">+{fmtNum(t.results.pointsAwarded[t.results.winner] ?? 0)} очков в рейтинг</p>
         </div>
-        {/* top-10 */}
         <div className="panel max-h-[76vh] overflow-hidden p-5">
           <p className="lbl !mb-3">Топ-10 · очки</p>
           <div className="space-y-1.5">
             {top.map((uidv, i) => {
-              const u = s.users[uidv];
+              const u = users[uidv];
               return (
                 <div key={uidv} className={cn("anim-slide flex items-center gap-3.5 rounded-xl px-3.5 py-2.5", i === 0 ? "bg-[#ffd76a]/10 ring-1 ring-[#ffd76a]/35" : i < 3 ? "bg-(--acc-soft)" : "bg-white/[0.03]")}
                   style={{ animationDelay: `${i * 110}ms` }}>
@@ -286,25 +291,28 @@ export function TvResults() {
 
 /* ================================ RANKING ================================ */
 export function TvRanking() {
-  const s = useDb();
-  const seasons = useMemo(() => Object.values(s.seasons).sort((a, b) => Number(b.isActive) - Number(a.isActive) || b.startDate - a.startDate), [s.seasons]);
+  const { users, tournaments, seasons } = useFirebaseData();
+  const seasonsList = useMemo(() => Object.values(seasons).sort((a, b) => Number(b.isActive) - Number(a.isActive) || b.startDate - a.startDate), [seasons]);
   const [mode, setMode] = useState<"all" | number>("all");
+  
   useEffect(() => {
     const i = setInterval(() => {
-      setMode((m) => (m === "all" ? 0 : m + 1 >= seasons.length ? "all" : m + 1));
+      setMode((m) => (m === "all" ? 0 : m + 1 >= seasonsList.length ? "all" : m + 1));
     }, 16000);
     return () => clearInterval(i);
-  }, [seasons.length]);
+  }, [seasonsList.length]);
 
   const rows = useMemo(() => {
     if (mode === "all") {
-      return Object.values(s.users).filter((u) => !u.isArchived).sort((a, b) => b.stats.points - a.stats.points).slice(0, 20)
+      return Object.values(users).filter((u) => !u.isArchived).sort((a, b) => b.stats.points - a.stats.points).slice(0, 20)
         .map((u, i) => ({ uid: u.uid, place: i + 1, points: u.stats.points, games: u.stats.totalTournaments, wins: u.stats.wins }));
     }
-    const sn = seasons[mode]; if (!sn) return [];
-    return computeSeasonRating(s, sn.id).slice(0, 20).map((r, i) => ({ uid: r.uid, place: i + 1, points: r.points, games: r.games, wins: r.wins }));
-  }, [mode, s, seasons]);
-  const title = mode === "all" ? "Рейтинг за все время" : seasons[mode]?.name ?? "";
+    const sn = seasonsList[mode]; if (!sn) return [];
+    const rating = computeSeasonRating(users, tournaments, sn.id);
+    return rating.slice(0, 20).map((r, i) => ({ uid: r.uid, place: i + 1, points: r.points, games: r.games, wins: r.wins }));
+  }, [mode, users, tournaments, seasonsList]);
+  
+  const title = mode === "all" ? "Рейтинг за все время" : seasonsList[mode]?.name ?? "";
 
   return (
     <TvFrame right={<span className="rounded-full bg-(--acc-soft) px-4 py-1.5 text-[13px] font-extrabold uppercase tracking-widest text-(--acc)">ТОП-20 клуба</span>}>
@@ -315,7 +323,7 @@ export function TvRanking() {
               mode === "all" ? "border-(--acc) bg-(--acc) text-(--acc-ink) shadow-[0_8px_26px_-10px_var(--acc)]" : "border-line bg-white/[0.04] text-mut hover:text-ink hover:border-(--acc-line)")}>
             Все время
           </button>
-          {seasons.map((sn, i) => (
+          {seasonsList.map((sn, i) => (
             <button key={sn.id} onClick={() => setMode(i)}
               className={cn("rounded-full border px-5 py-2 text-[13px] font-extrabold uppercase tracking-wider transition-all duration-300",
                 mode === i ? "border-(--acc) bg-(--acc) text-(--acc-ink) shadow-[0_8px_26px_-10px_var(--acc)]" : "border-line bg-white/[0.04] text-mut hover:text-ink hover:border-(--acc-line)")}>
@@ -329,7 +337,7 @@ export function TvRanking() {
         </div>
         <div key={String(mode)} className="panel anim-in flex-1 overflow-hidden px-4 py-3">
           {rows.map((r, i) => {
-            const u = s.users[r.uid];
+            const u = users[r.uid];
             return (
               <div key={r.uid} className={cn("flex items-center gap-4 border-b border-line/60 px-3 py-[0.85vh] last:border-0", i < 3 && "bg-(--acc-soft) rounded-xl border-0")}>
                 <span className={cn("num w-12 text-center font-display text-[clamp(17px,1.8vw,26px)] font-extrabold", i === 0 ? "text-[#ffd76a]" : i === 1 ? "text-[#c9d4e5]" : i === 2 ? "text-[#d9915b]" : "text-dim")}>{r.place}</span>
@@ -349,6 +357,3 @@ export function TvRanking() {
     </TvFrame>
   );
 }
-
-/* helper for timer icon reuse */
-export { Timer as TvTimerIcon };

@@ -1,17 +1,20 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Plus, Pencil, Trash2, Play, Users, CalendarDays, Coins, Timer, ListOrdered, Settings2,
   Gift, LayoutGrid, ChevronUp, ChevronDown, Search, X, Shuffle, SortDesc, Zap, FileStack,
   Save, ArrowLeft, ExternalLink, Trophy, Dices, AlertTriangle, Scale,
 } from "lucide-react";
+import { useFirebaseData } from "../lib/useFirebaseData";
+import { useAuth } from "../lib/useAuth";
 import {
-  useDb, Tournament, TournamentDraft, TemplateData, Root, User, capacity, lateRegOpen,
-  saveTournament, deleteTournament, launchTournament, registerSelf, cancelSelf, setSeat,
-  setPlayerNumber, seatRandom, seatByRating, saveTemplate, sortedSeatCodes,
-  tableCounts, balanceErrorForSeat,
-  fmtDate, fmtNum, fmtDateShort, plural, DAY, uid as genId, can,
+  Tournament, TournamentDraft, capacity, lateRegOpen,
+  fmtDate, fmtNum, fmtDateShort, plural, DAY, uid as genId,
 } from "../lib/db";
+import {
+  saveTournament, deleteTournament, launchTournament, registerSelf, cancelSelf, setSeat,
+  setPlayerNumber, seatRandom, seatByRating, saveTemplate,
+} from "../lib/firebaseDb";
 import { Avatar, Badge, Btn, Empty, Field, Modal, Reveal, SectionTitle, Select, StatusBadge, Tabs, Toggle, cn, toast, useHoverDelay } from "../lib/ui";
 
 const toISO = (ts: number) => new Date(ts - new Date(ts).getTimezoneOffset() * 60000).toISOString().slice(0, 10);
@@ -19,24 +22,35 @@ const fromISO = (iso: string) => new Date(iso + "T12:00:00").getTime();
 
 /* ================================ СПИСОК ================================ */
 export default function TournamentsList() {
-  const s = useDb();
+  const { tournaments, seasons, users } = useFirebaseData();
+  const { firebaseUser } = useAuth();
   const nav = useNavigate();
   const [tab, setTab] = useState("planned");
   const [del, setDel] = useState<Tournament | null>(null);
   const [res, setRes] = useState<Tournament | null>(null);
-  const isAdmin = can(s, "admin");
+  const [loading, setLoading] = useState(false);
+  
+  const me = firebaseUser ? users[firebaseUser.uid] : null;
+  const isAdmin = me?.role === "admin";
 
   const groups: Record<string, Tournament[]> = { active: [], planned: [], completed: [] };
-  Object.values(s.tournaments).forEach((t) => groups[t.status].push(t));
+  Object.values(tournaments).forEach((t) => groups[t.status].push(t));
   (["active", "planned"] as const).forEach((k) => groups[k].sort((a, b) => a.startDate - b.startDate));
   groups.completed.sort((a, b) => (b.results?.completedAt ?? 0) - (a.results?.completedAt ?? 0));
   const list = groups[tab];
 
-  const onLaunch = (t: Tournament) => {
-    const err = launchTournament(t.id);
-    if (err) { toast(err, "err"); return; }
-    toast(`«${t.name}» запущен — таймер идёт`);
-    nav(`/app/pult/${t.id}`);
+  const onLaunch = async (t: Tournament) => {
+    setLoading(true);
+    try {
+      const err = await launchTournament(t.id);
+      if (err) { toast(err, "err"); return; }
+      toast(`«${t.name}» запущен — таймер идёт`);
+      nav(`/app/pult/${t.id}`);
+    } catch (err: any) {
+      toast(err.message || "Ошибка", "err");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -64,7 +78,7 @@ export default function TournamentsList() {
                     {t.status === "planned" && seated < 2 && cnt > 0 && <Badge tone="warn">рассажено {seated}</Badge>}
                   </div>
                   <h3 className="mt-3 font-display text-[16.5px] font-extrabold leading-snug">{t.name}</h3>
-                  <p className="mt-1 text-[12.5px] text-mut">{s.seasons[t.seasonId]?.name ?? "Вне сезона"}</p>
+                  <p className="mt-1 text-[12.5px] text-mut">{seasons[t.seasonId]?.name ?? "Вне сезона"}</p>
                   <div className="mt-4 grid grid-cols-2 gap-x-2 gap-y-1.5 text-[12.5px] font-semibold text-mut">
                     <span className="flex items-center gap-1.5"><CalendarDays className="size-4 text-(--acc)" /> {fmtDate(t.startDate)} · {t.startTime}</span>
                     <span className="flex items-center gap-1.5"><Coins className="size-4 text-(--acc)" /> {fmtNum(t.startingStack)}</span>
@@ -78,22 +92,28 @@ export default function TournamentsList() {
                     </p>
                   )}
                   <div className="mt-auto flex flex-wrap gap-2 pt-4">
-                    {t.status === "planned" && (<>
-                      <Btn size="sm" variant="soft" onClick={() => nav(`/app/tournaments/${t.id}/seats`)}><Users className="size-4" /> Регистрация</Btn>
-                      <Btn size="sm" variant="ghost" onClick={() => onLaunch(t)} disabled={seated < 2} title={seated < 2 ? "Нужно минимум 2 участника за столами" : ""}><Play className="size-4" /> Запустить</Btn>
-                      <Btn size="sm" variant="dark" onClick={() => nav(`/app/tournaments/${t.id}/edit`)}><Pencil className="size-4" /></Btn>
-                      {isAdmin && <Btn size="sm" variant="danger" onClick={() => setDel(t)}><Trash2 className="size-4" /></Btn>}
-                    </>)}
-                    {t.status === "active" && (<>
-                      <Btn size="sm" onClick={() => nav(`/app/pult/${t.id}`)}><Zap className="size-4" /> Пульт</Btn>
-                      <Btn size="sm" variant="soft" onClick={() => nav(`/app/tournaments/${t.id}/seats`)}><Users className="size-4" /> Регистрация</Btn>
-                    </>)}
-                    {t.status === "completed" && (<>
-                      <Btn size="sm" variant="soft" onClick={() => setRes(t)}><ListOrdered className="size-4" /> Итоги</Btn>
-                      <a href={`#/screen/results/${t.id}`} className="inline-flex items-center gap-2 rounded-xl border border-line bg-white/[0.04] px-3.5 py-2 text-[13px] font-bold text-mut transition hover:text-(--acc) hover:border-(--acc-line)">
-                        <ExternalLink className="size-4" /> ТВ-экран
-                      </a>
-                    </>)}
+                    {t.status === "planned" && (
+                      <>
+                        <Btn size="sm" variant="soft" onClick={() => nav(`/app/tournaments/${t.id}/seats`)}><Users className="size-4" /> Регистрация</Btn>
+                        <Btn size="sm" variant="ghost" onClick={() => onLaunch(t)} disabled={seated < 2 || loading} title={seated < 2 ? "Нужно минимум 2 участника за столами" : ""}><Play className="size-4" /> Запустить</Btn>
+                        <Btn size="sm" variant="dark" onClick={() => nav(`/app/tournaments/${t.id}/edit`)}><Pencil className="size-4" /></Btn>
+                        {isAdmin && <Btn size="sm" variant="danger" onClick={() => setDel(t)}><Trash2 className="size-4" /></Btn>}
+                      </>
+                    )}
+                    {t.status === "active" && (
+                      <>
+                        <Btn size="sm" onClick={() => nav(`/app/pult/${t.id}`)}><Zap className="size-4" /> Пульт</Btn>
+                        <Btn size="sm" variant="soft" onClick={() => nav(`/app/tournaments/${t.id}/seats`)}><Users className="size-4" /> Регистрация</Btn>
+                      </>
+                    )}
+                    {t.status === "completed" && (
+                      <>
+                        <Btn size="sm" variant="soft" onClick={() => setRes(t)}><ListOrdered className="size-4" /> Итоги</Btn>
+                        <a href={`#/screen/results/${t.id}`} className="inline-flex items-center gap-2 rounded-xl border border-line bg-white/[0.04] px-3.5 py-2 text-[13px] font-bold text-mut transition hover:text-(--acc) hover:border-(--acc-line)">
+                          <ExternalLink className="size-4" /> ТВ-экран
+                        </a>
+                      </>
+                    )}
                   </div>
                 </div>
               </Reveal>
@@ -106,7 +126,20 @@ export default function TournamentsList() {
         <p className="text-[13.5px] font-semibold leading-relaxed text-mut">Записи участников будут удалены вместе с турниром. Действие необратимо.</p>
         <div className="mt-5 flex justify-end gap-2">
           <Btn variant="ghost" onClick={() => setDel(null)}>Отмена</Btn>
-          <Btn variant="danger" onClick={() => { if (del) { deleteTournament(del.id); toast("Турнир удалён", "info"); } setDel(null); }}><Trash2 className="size-4" /> Удалить</Btn>
+          <Btn variant="danger" onClick={async () => { 
+            if (del) { 
+              setLoading(true);
+              try {
+                await deleteTournament(del.id); 
+                toast("Турнир удалён", "info"); 
+              } catch (err: any) {
+                toast(err.message || "Ошибка", "err");
+              } finally {
+                setLoading(false);
+              }
+            } 
+            setDel(null); 
+          }} disabled={loading}><Trash2 className="size-4" /> Удалить</Btn>
         </div>
       </Modal>
 
@@ -116,8 +149,8 @@ export default function TournamentsList() {
             {res.results.ranking.map((u, i) => (
               <div key={u} className={cn("flex items-center gap-3 rounded-xl px-3 py-2.5", i === 0 ? "bg-[#ffd76a]/10 ring-1 ring-[#ffd76a]/30" : "bg-white/[0.03]")}>
                 <span className={cn("num w-9 text-center font-display text-[16px] font-extrabold", i === 0 ? "text-[#ffd76a]" : i === 1 ? "text-[#c9d4e5]" : i === 2 ? "text-[#d9915b]" : "text-dim")}>{i + 1}</span>
-                <Avatar user={s.users[u]} size={34} />
-                <span className="min-w-0 flex-1 truncate text-[13.5px] font-bold">{s.users[u]?.nickname ?? "—"}</span>
+                <Avatar user={users[u]} size={34} />
+                <span className="min-w-0 flex-1 truncate text-[13.5px] font-bold">{users[u]?.nickname ?? "—"}</span>
                 <span className="num text-[14px] font-extrabold text-(--acc)">+{res.results!.pointsAwarded[u] ?? 0}</span>
               </div>
             ))}
@@ -129,8 +162,8 @@ export default function TournamentsList() {
 }
 
 /* ================================ ФОРМА ================================ */
-function defaultDraft(s: Root): TournamentDraft {
-  const seasonId = Object.values(s.seasons).find((x) => x.isActive)?.id ?? Object.keys(s.seasons)[0] ?? "";
+function defaultDraft(seasons: Record<string, any>): TournamentDraft {
+  const seasonId = Object.values(seasons).find((x) => x.isActive)?.id ?? Object.keys(seasons)[0] ?? "";
   return {
     name: "", seasonId, startDate: Date.now() + 2 * DAY, startTime: "19:00", registrationDuration: 30,
     startingStack: 15000, finalTablePlayers: 9, description: "", pointsForKnockout: true,
@@ -151,13 +184,17 @@ function defaultDraft(s: Root): TournamentDraft {
 }
 
 export function TournamentForm({ editId, templateId }: { editId: string | null; templateId?: string | null }) {
-  const s = useDb();
+  const { tournaments, seasons, templates } = useFirebaseData();
+  const { firebaseUser } = useAuth();
   const nav = useNavigate();
-  const editing = editId ? s.tournaments[editId] : null;
+  const [loading, setLoading] = useState(false);
+  
+  const editing = editId ? tournaments[editId] : null;
   const tplMode = templateId != null;
-  const srcTpl = tplMode && templateId !== "new" ? s.templates[templateId] : null;
+  const srcTpl = tplMode && templateId !== "new" ? templates[templateId] : null;
+  
   const [d, setD] = useState<TournamentDraft>(() => {
-    const seasonId = Object.values(s.seasons).find((x) => x.isActive)?.id ?? Object.keys(s.seasons)[0] ?? "";
+    const seasonId = Object.values(seasons).find((x) => x.isActive)?.id ?? Object.keys(seasons)[0] ?? "";
     if (srcTpl) {
       const td = srcTpl.data;
       return {
@@ -165,40 +202,62 @@ export function TournamentForm({ editId, templateId }: { editId: string | null; 
         registrationDuration: td.registrationDuration, startingStack: td.startingStack,
         finalTablePlayers: td.finalTablePlayers, description: td.description,
         pointsForKnockout: td.pointsForKnockout, knockoutPoints: td.knockoutPoints ?? 5,
-        rebuyChips: td.rebuyChips ?? td.startingStack, reentryChips: td.reentryChips ?? td.startingStack, addonChips: td.addonChips ?? Math.round(td.startingStack / 2),
+        rebuyChips: td.rebuyChips ?? td.startingStack, reentryChips: td.reentryChips ?? td.startingStack, 
+        addonChips: td.addonChips ?? Math.round(td.startingStack / 2),
         structure: structuredClone(td.structure), bonuses: structuredClone(td.bonuses),
         pointsTable: { ...td.pointsTable }, tables: { ...td.tables },
       };
     }
-    if (!editing) return defaultDraft(s);
+    if (!editing) return defaultDraft(seasons);
     return {
       name: editing.name, seasonId: editing.seasonId, startDate: editing.startDate, startTime: editing.startTime,
       registrationDuration: editing.registrationDuration, startingStack: editing.startingStack,
       finalTablePlayers: editing.finalTablePlayers, description: editing.description,
       pointsForKnockout: editing.pointsForKnockout, knockoutPoints: editing.knockoutPoints ?? 5,
-      rebuyChips: editing.rebuyChips ?? editing.startingStack, reentryChips: editing.reentryChips ?? editing.startingStack, addonChips: editing.addonChips ?? Math.round(editing.startingStack / 2),
+      rebuyChips: editing.rebuyChips ?? editing.startingStack, reentryChips: editing.reentryChips ?? editing.startingStack, 
+      addonChips: editing.addonChips ?? Math.round(editing.startingStack / 2),
       structure: structuredClone(editing.structure),
       bonuses: structuredClone(editing.bonuses), pointsTable: { ...editing.pointsTable },
       tables: { totalTables: editing.tables.totalTables, seatsPerTable: editing.tables.seatsPerTable },
     };
   });
+  
   const [tab, setTab] = useState("params");
   const [tplOpen, setTplOpen] = useState(false);
   const [saveTpl, setSaveTpl] = useState(false);
   const [tplName, setTplName] = useState("");
 
   const set = (patch: Partial<TournamentDraft>) => setD((p) => ({ ...p, ...patch }));
-  const setStruct = (fn: (st: TournamentDraft["structure"]) => void) => setD((p) => { const st = structuredClone(p.structure); fn(st); return { ...p, structure: st }; });
+  
+  const setStruct = (fn: (st: TournamentDraft["structure"]) => void) => setD((p) => { 
+    const st = structuredClone(p.structure); 
+    fn(st); 
+    return { ...p, structure: st }; 
+  });
+  
   const moveLevel = (i: number, dir: -1 | 1) => setStruct((st) => {
-    const j = i + dir; if (j < 0 || j >= st.levels.length) return;
+    const j = i + dir; 
+    if (j < 0 || j >= st.levels.length) return;
     [st.levels[i], st.levels[j]] = [st.levels[j], st.levels[i]];
     st.levels.forEach((l, k) => (l.level = k + 1));
   });
+  
   const addLevel = () => setStruct((st) => {
     const last = st.levels[st.levels.length - 1] ?? { sb: 25, bb: 50, ante: 0, duration: 12 };
-    st.levels.push({ level: st.levels.length + 1, sb: last.bb, bb: last.bb * 2, ante: last.ante ? Math.round(last.ante * 2) : 0, duration: last.duration });
+    st.levels.push({ 
+      level: st.levels.length + 1, 
+      sb: last.bb, 
+      bb: last.bb * 2, 
+      ante: last.ante ? Math.round(last.ante * 2) : 0, 
+      duration: last.duration 
+    });
   });
-  const removeLevel = (i: number) => setStruct((st) => { st.levels.splice(i, 1); st.levels.forEach((l, k) => (l.level = k + 1)); });
+  
+  const removeLevel = (i: number) => setStruct((st) => { 
+    st.levels.splice(i, 1); 
+    st.levels.forEach((l, k) => (l.level = k + 1)); 
+  });
+  
   const updLevel = (i: number, patch: Partial<TournamentDraft["structure"]["levels"][0]>) =>
     setStruct((st) => Object.assign(st.levels[i], patch));
 
@@ -208,6 +267,7 @@ export function TournamentForm({ editId, templateId }: { editId: string | null; 
     registrationDuration: x.registrationDuration, description: x.description,
     structure: x.structure, bonuses: x.bonuses, pointsTable: x.pointsTable, tables: x.tables,
   });
+  
   const applyTemplate = (data: TemplateData) => {
     setD((p) => ({
       ...p, startingStack: data.startingStack, finalTablePlayers: data.finalTablePlayers,
@@ -222,23 +282,39 @@ export function TournamentForm({ editId, templateId }: { editId: string | null; 
     setTplOpen(false);
     toast("Шаблон применён — данные можно отредактировать");
   };
-  const doSaveTpl = () => {
-    if (tplMode) {
-      const err = saveTemplate(templateId === "new" ? null : templateId, d.name.trim(), toTemplateData(d));
+  
+  const doSaveTpl = async () => {
+    setLoading(true);
+    try {
+      if (tplMode) {
+        const err = await saveTemplate(templateId === "new" ? null : templateId, d.name.trim(), toTemplateData(d));
+        if (err) { toast(err, "err"); return; }
+        toast("Шаблон сохранён в библиотеку");
+        nav("/app/templates");
+        return;
+      }
+      const err = await saveTemplate(null, tplName || d.name + " (шаблон)", toTemplateData(d));
       if (err) { toast(err, "err"); return; }
-      toast("Шаблон сохранён в библиотеку");
-      nav("/app/templates");
-      return;
+      setSaveTpl(false); setTplName(""); toast("Шаблон сохранён в библиотеку");
+    } catch (err: any) {
+      toast(err.message || "Ошибка", "err");
+    } finally {
+      setLoading(false);
     }
-    const err = saveTemplate(null, tplName || d.name + " (шаблон)", toTemplateData(d));
-    if (err) { toast(err, "err"); return; }
-    setSaveTpl(false); setTplName(""); toast("Шаблон сохранён в библиотеку");
   };
-  const doSave = () => {
-    const err = saveTournament(editId, d);
-    if (err) { toast(err, "err"); return; }
-    toast(editId ? "Турнир обновлён" : "Турнир создан — регистрация открыта");
-    nav("/app/tournaments");
+  
+  const doSave = async () => {
+    setLoading(true);
+    try {
+      const err = await saveTournament(editId, d);
+      if (err) { toast(err, "err"); return; }
+      toast(editId ? "Турнир обновлён" : "Турнир создан — регистрация открыта");
+      nav("/app/tournaments");
+    } catch (err: any) {
+      toast(err.message || "Ошибка", "err");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const pts = Object.entries(d.pointsTable).filter(([k]) => k !== "participation");
@@ -275,7 +351,7 @@ export function TournamentForm({ editId, templateId }: { editId: string | null; 
           <div className="grid gap-4 sm:grid-cols-2 anim-in">
             <Field label="Название турнира"><input className="inp" value={d.name} onChange={(e) => set({ name: e.target.value })} placeholder="Кубок осени" /></Field>
             <Select label="Сезон" value={d.seasonId} onChange={(v) => set({ seasonId: v })}
-              options={Object.values(s.seasons).map((x) => ({ v: x.id, l: x.name + (x.isActive ? " · активен" : "") }))} />
+              options={Object.values(seasons).map((x) => ({ v: x.id, l: x.name + (x.isActive ? " · активен" : "") }))} />
             <Field label="Дата старта"><input type="date" className="inp" value={toISO(d.startDate)} onChange={(e) => e.target.value && set({ startDate: fromISO(e.target.value) })} /></Field>
             <Field label="Время старта"><input type="time" className="inp" value={d.startTime} onChange={(e) => set({ startTime: e.target.value })} /></Field>
             <Field label="Стартовый стек" hint="Фишек у каждого игрока на старте"><input type="number" className="inp" value={d.startingStack} onChange={(e) => set({ startingStack: +e.target.value || 0 })} /></Field>
@@ -348,8 +424,16 @@ export function TournamentForm({ editId, templateId }: { editId: string | null; 
             <div className="space-y-2">
               {d.bonuses.map((b, i) => (
                 <div key={b.id} className="grid grid-cols-[2fr_1fr_auto] items-center gap-2 rounded-xl border border-line bg-white/[0.03] p-2.5">
-                  <input className="inp !min-h-[42px]" value={b.name} onChange={(e) => setD((p) => { const bn = [...p.bonuses]; bn[i] = { ...bn[i], name: e.target.value }; return { ...p, bonuses: bn }; })} placeholder="Название бонуса" />
-                  <NumIn label="Фишек" v={b.chips} on={(v) => setD((p) => { const bn = [...p.bonuses]; bn[i] = { ...bn[i], chips: v }; return { ...p, bonuses: bn }; })} />
+                  <input className="inp !min-h-[42px]" value={b.name} onChange={(e) => setD((p) => { 
+                    const bn = [...p.bonuses]; 
+                    bn[i] = { ...bn[i], name: e.target.value }; 
+                    return { ...p, bonuses: bn }; 
+                  })} placeholder="Название бонуса" />
+                  <NumIn label="Фишек" v={b.chips} on={(v) => setD((p) => { 
+                    const bn = [...p.bonuses]; 
+                    bn[i] = { ...bn[i], chips: v }; 
+                    return { ...p, bonuses: bn }; 
+                  })} />
                   <IconBtn onClick={() => setD((p) => ({ ...p, bonuses: p.bonuses.filter((x) => x.id !== b.id) }))} danger><X className="size-4" /></IconBtn>
                 </div>
               ))}
@@ -400,15 +484,15 @@ export function TournamentForm({ editId, templateId }: { editId: string | null; 
       <div className="mt-4 flex flex-wrap justify-end gap-2">
         <Btn variant="ghost" onClick={() => nav(tplMode ? "/app/templates" : "/app/tournaments")}>Отмена</Btn>
         {tplMode ? (
-          <Btn size="lg" onClick={doSaveTpl}><FileStack className="size-4.5" /> {srcTpl ? "Сохранить шаблон" : "Создать шаблон"}</Btn>
+          <Btn size="lg" onClick={doSaveTpl} disabled={loading}><FileStack className="size-4.5" /> {srcTpl ? "Сохранить шаблон" : "Создать шаблон"}</Btn>
         ) : (
-          <Btn size="lg" onClick={doSave}><Save className="size-4.5" /> {editing ? "Сохранить изменения" : "Создать турнир"}</Btn>
+          <Btn size="lg" onClick={doSave} disabled={loading}><Save className="size-4.5" /> {editing ? "Сохранить изменения" : "Создать турнир"}</Btn>
         )}
       </div>
 
       <Modal open={tplOpen} onClose={() => setTplOpen(false)} title="Выбрать шаблон" subtitle="Параметры, структура, бонусы и очки подставятся автоматически" w="max-w-xl">
         <div className="space-y-2">
-          {Object.values(s.templates).map((t) => (
+          {Object.values(templates).map((t) => (
             <button key={t.id} onClick={() => applyTemplate(t.data)}
               className="flex w-full items-center gap-4 rounded-xl border border-line bg-white/[0.03] px-4 py-3.5 text-left transition hover:border-(--acc-line) hover:bg-(--acc-soft)">
               <FileStack className="size-5 shrink-0 text-(--acc)" />
@@ -419,13 +503,13 @@ export function TournamentForm({ editId, templateId }: { editId: string | null; 
               <ChevronDown className="size-4 -rotate-90 text-dim" />
             </button>
           ))}
-          {Object.keys(s.templates).length === 0 && <Empty title="Шаблонов пока нет" text="Сохраните структуру турнира как шаблон — он появится здесь." />}
+          {Object.keys(templates).length === 0 && <Empty title="Шаблонов пока нет" text="Сохраните структуру турнира как шаблон — он появится здесь." />}
         </div>
       </Modal>
 
       <Modal open={saveTpl} onClose={() => setSaveTpl(false)} title="Сохранить как шаблон" subtitle="Текущая конфигурация турнира станет шаблоном">
         <Field label="Название шаблона"><input className="inp" value={tplName} onChange={(e) => setTplName(e.target.value)} placeholder={d.name ? d.name + " (шаблон)" : "Мой MTT"} /></Field>
-        <div className="mt-5 flex justify-end gap-2"><Btn variant="ghost" onClick={() => setSaveTpl(false)}>Отмена</Btn><Btn onClick={doSaveTpl}><Save className="size-4" /> Сохранить</Btn></div>
+        <div className="mt-5 flex justify-end gap-2"><Btn variant="ghost" onClick={() => setSaveTpl(false)}>Отмена</Btn><Btn onClick={doSaveTpl} disabled={loading}><Save className="size-4" /> Сохранить</Btn></div>
       </Modal>
     </div>
   );
@@ -439,6 +523,7 @@ function NumIn({ label, v, on }: { label: string; v: number; on: (n: number) => 
     </label>
   );
 }
+
 function IconBtn({ children, onClick, disabled, danger }: { children: React.ReactNode; onClick: () => void; disabled?: boolean; danger?: boolean }) {
   return (
     <button onClick={onClick} disabled={disabled}
@@ -447,8 +532,6 @@ function IconBtn({ children, onClick, disabled, danger }: { children: React.Reac
   );
 }
 
-/** Номер участника: свободно вводится (например «31», даже если «3» занят),
- *  проверяется на уникальность при потере фокуса или Enter. */
 function NumField({ value, onCommit, disabled, title }: { value: number | null; onCommit: (raw: string) => string | null; disabled?: boolean; title?: string }) {
   const [draft, setDraft] = useState(value == null ? "" : String(value));
   const [focus, setFocus] = useState(false);
@@ -476,15 +559,18 @@ function NumField({ value, onCommit, disabled, title }: { value: number | null; 
 
 /* ================================ РЕГИСТРАЦИЯ + СТОЛЫ ================================ */
 export function TournamentSeats({ tid, ro }: { tid: string; ro: boolean }) {
-  const s = useDb();
+  const { tournaments, users } = useFirebaseData();
+  const { firebaseUser } = useAuth();
   const nav = useNavigate();
-  const t = s.tournaments[tid];
+  const t = tournaments[tid];
   const [q, setQ] = useState("");
   const [dragUid, setDragUid] = useState<string | null>(null);
   const [selUid, setSelUid] = useState<string | null>(null);
   const [pickSeat, setPickSeat] = useState<string | null>(null);
   const [pickQ, setPickQ] = useState("");
   const [occSeat, setOccSeat] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  
   if (!t) return <Empty title="Турнир не найден" />;
 
   const regs = Object.entries(t.registeredPlayers).sort((a, b) => (a[1].playerNumber ?? 99999) - (b[1].playerNumber ?? 99999));
@@ -493,33 +579,81 @@ export function TournamentSeats({ tid, ro }: { tid: string; ro: boolean }) {
   const unseatedReady = unseated.filter(([, r]) => r.playerNumber != null);
   const noNumCnt = unseated.length - unseatedReady.length;
   const codes = sortedSeatCodes(t);
-  const pool = Object.values(s.users).filter((u) => !u.isArchived && !u.isBlocked && !t.registeredPlayers[u.uid]);
+  const pool = Object.values(users).filter((u) => !u.isArchived && !u.isBlocked && !t.registeredPlayers[u.uid]);
   const found = pool.filter((u) => (u.nickname + " " + u.firstName + " " + u.lastName).toLowerCase().includes(q.toLowerCase()));
   const regOpen = lateRegOpen(t);
   const seatedCnt = Object.values(t.registeredPlayers).filter((r) => r.seatCode).length;
   const counts = tableCounts(t);
   const minCnt = Math.min(...Object.values(counts));
+  
   const batchToast = (r: { seated: number; skippedNoNumber: number }) => {
     if (r.seated === 0 && r.skippedNoNumber > 0) { toast("Рассадить некого: у всех игроков без места нет номера", "err"); return; }
     toast(`Рассажено: ${r.seated} ${plural(r.seated, "игрок", "игрока", "игроков")}${r.skippedNoNumber ? ` · без номера пропущено: ${r.skippedNoNumber}` : ""}`, r.skippedNoNumber ? "info" : "ok");
   };
 
-  const addPlayer = (u: User) => {
-    const err = registerSelf(t.id, u.uid);
-    if (err) { toast(err, "err"); return; }
-    toast(`${u.nickname} зарегистрирован — присвойте номер, чтобы посадить за стол`);
+  const addPlayer = async (u: User) => {
+    setLoading(true);
+    try {
+      const err = await registerSelf(t.id, u.uid);
+      if (err) { toast(err, "err"); return; }
+      toast(`${u.nickname} зарегистрирован — присвойте номер, чтобы посадить за стол`);
+    } catch (err: any) {
+      toast(err.message || "Ошибка", "err");
+    } finally {
+      setLoading(false);
+    }
   };
-  const trySeat = (code: string) => {
+  
+  const trySeat = async (code: string) => {
     if (!selUid) return;
-    const err = setSeat(t.id, selUid, code);
-    if (err) { toast(err, "err"); return; }
-    setSelUid(null);
+    setLoading(true);
+    try {
+      const err = await setSeat(t.id, selUid, code);
+      if (err) { toast(err, "err"); return; }
+      setSelUid(null);
+    } catch (err: any) {
+      toast(err.message || "Ошибка", "err");
+    } finally {
+      setLoading(false);
+    }
   };
-  const onLaunch = () => {
-    const err = launchTournament(t.id);
-    if (err) { toast(err, "err"); return; }
-    toast(`«${t.name}» запущен!`);
-    nav(`/app/pult/${t.id}`);
+  
+  const onLaunch = async () => {
+    setLoading(true);
+    try {
+      const err = await launchTournament(t.id);
+      if (err) { toast(err, "err"); return; }
+      toast(`«${t.name}» запущен!`);
+      nav(`/app/pult/${t.id}`);
+    } catch (err: any) {
+      toast(err.message || "Ошибка", "err");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSeatRandom = async () => {
+    setLoading(true);
+    try {
+      const result = await seatRandom(t.id);
+      batchToast(result);
+    } catch (err: any) {
+      toast(err.message || "Ошибка", "err");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSeatByRating = async () => {
+    setLoading(true);
+    try {
+      const result = await seatByRating(t.id);
+      batchToast(result);
+    } catch (err: any) {
+      toast(err.message || "Ошибка", "err");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -530,15 +664,14 @@ export function TournamentSeats({ tid, ro }: { tid: string; ro: boolean }) {
       <SectionTitle kicker="Регистрация и рассадка" title={`«${t.name}»`}
         right={
           <div className="flex flex-wrap items-center gap-2">
-            <Btn variant="ghost" size="sm" onClick={() => batchToast(seatRandom(t.id))} disabled={ro || unseatedReady.length === 0} title="Рассаживает игроков с номерами, соблюдая баланс столов"><Dices className="size-4" /> Случайно</Btn>
-            <Btn variant="ghost" size="sm" onClick={() => batchToast(seatByRating(t.id))} disabled={ro || unseatedReady.length === 0} title="Соседи по рейтингу — за одним столом, с балансом по заполненности"><SortDesc className="size-4" /> По рейтингу</Btn>
-            {t.status === "planned" && <Btn size="sm" onClick={onLaunch} disabled={ro || seatedCnt < 2}><Play className="size-4" /> Запустить</Btn>}
+            <Btn variant="ghost" size="sm" onClick={handleSeatRandom} disabled={ro || loading || unseatedReady.length === 0} title="Рассаживает игроков с номерами, соблюдая баланс столов"><Dices className="size-4" /> Случайно</Btn>
+            <Btn variant="ghost" size="sm" onClick={handleSeatByRating} disabled={ro || loading || unseatedReady.length === 0} title="Соседи по рейтингу — за одним столом, с балансом по заполненности"><SortDesc className="size-4" /> По рейтингу</Btn>
+            {t.status === "planned" && <Btn size="sm" onClick={onLaunch} disabled={ro || loading || seatedCnt < 2}><Play className="size-4" /> Запустить</Btn>}
             {t.status === "active" && <Btn size="sm" onClick={() => nav(`/app/pult/${t.id}`)}><Zap className="size-4" /> Пульт</Btn>}
           </div>
         } />
 
       <div className="grid gap-4 xl:grid-cols-[380px_1fr]">
-        {/* left: registration */}
         <div className="space-y-4">
           <Reveal>
             <div className="panel p-5">
@@ -555,7 +688,7 @@ export function TournamentSeats({ tid, ro }: { tid: string; ro: boolean }) {
                       <span className="block truncate text-[13px] font-bold">{u.nickname}</span>
                       <span className="block truncate text-[11px] text-dim">{u.firstName} {u.lastName}</span>
                     </span>
-                    <Btn size="xs" variant="soft" disabled={ro || !regOpen} onClick={() => addPlayer(u)}><Plus className="size-3.5" /> </Btn>
+                    <Btn size="xs" variant="soft" disabled={ro || !regOpen || loading} onClick={() => addPlayer(u)}><Plus className="size-3.5" /> </Btn>
                   </div>
                 ))}
                 {found.length === 0 && <p className="py-4 text-center text-[12.5px] text-dim">Все подходящие игроки уже зарегистрированы</p>}
@@ -569,9 +702,9 @@ export function TournamentSeats({ tid, ro }: { tid: string; ro: boolean }) {
               <div className="mt-2 max-h-[380px] space-y-1.5 overflow-y-auto pr-1">
                 {regs.map(([u, r]) => (
                   <div key={u} className={cn("flex items-center gap-2.5 rounded-xl border border-transparent bg-white/[0.03] px-2.5 py-2 transition", selUid === u && "border-(--acc-line) bg-(--acc-soft)")}>
-                    <Avatar user={s.users[u]} size={34} />
+                    <Avatar user={users[u]} size={34} />
                     <button className="min-w-0 flex-1 text-left" onClick={() => setSelUid(selUid === u ? null : u)}>
-                      <span className="block truncate text-[13px] font-bold">{s.users[u]?.nickname}</span>
+                      <span className="block truncate text-[13px] font-bold">{users[u]?.nickname}</span>
                       <span className="text-[11px] font-semibold text-dim">{r.seatCode ? `место ${r.seatCode}` : r.playerNumber == null ? "без места · нет номера" : "без места"} · {fmtDateShort(r.registeredAt)}</span>
                     </button>
                     <span className="relative">
@@ -580,7 +713,17 @@ export function TournamentSeats({ tid, ro }: { tid: string; ro: boolean }) {
                         onCommit={(raw) => setPlayerNumber(t.id, u, raw ? +raw : null)} />
                       {r.playerNumber == null && <AlertTriangle className="absolute -right-1 -top-1 size-3.5 text-warn" />}
                     </span>
-                    {!ro && <button onClick={() => { cancelSelf(t.id, u); toast("Регистрация отменена", "info"); }} className="text-dim transition hover:text-bad"><X className="size-4" /></button>}
+                    {!ro && <button onClick={async () => { 
+                      setLoading(true);
+                      try {
+                        await cancelSelf(t.id, u); 
+                        toast("Регистрация отменена", "info"); 
+                      } catch (err: any) {
+                        toast(err.message || "Ошибка", "err");
+                      } finally {
+                        setLoading(false);
+                      }
+                    }} className="text-dim transition hover:text-bad"><X className="size-4" /></button>}
                   </div>
                 ))}
                 {regs.length === 0 && <p className="py-5 text-center text-[12.5px] text-dim">Пока никто не зарегистрировался</p>}
@@ -589,21 +732,35 @@ export function TournamentSeats({ tid, ro }: { tid: string; ro: boolean }) {
           </Reveal>
         </div>
 
-        {/* right: tables */}
         <Reveal delay={120}>
           <div className="space-y-4">
             <div className={cn("panel p-4 transition", selUid && "ring-1 ring-(--acc-line)")}>
               <p className="lbl flex items-center justify-between">
                 <span className="flex items-center gap-2"><Shuffle className="size-4 text-(--acc)" /> Участники без места ({unseated.length})</span>
                 {selUid
-                  ? <span className="text-[10.5px] normal-case tracking-normal text-(--acc)">выбран: {s.users[selUid]?.nickname} — кликните на место</span>
+                  ? <span className="text-[10.5px] normal-case tracking-normal text-(--acc)">выбран: {users[selUid]?.nickname} — кликните на место</span>
                   : <span className="hidden text-[10.5px] normal-case tracking-normal text-dim sm:inline">перетащите или кликните на свободное место</span>}
               </p>
               <div className="flex min-h-[64px] flex-wrap gap-2 pt-1"
                 onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => { e.preventDefault(); const u = e.dataTransfer.getData("uid") || dragUid; if (u && !ro) { setSeat(t.id, u, null); setDragUid(null); toast("Игрок возвращён в пул без места", "info"); } }}>
+                onDrop={async (e) => { 
+                  e.preventDefault(); 
+                  const u = e.dataTransfer.getData("uid") || dragUid; 
+                  if (u && !ro) {
+                    setLoading(true);
+                    try {
+                      await setSeat(t.id, u, null);
+                      setDragUid(null);
+                      toast("Игрок возвращён в пул без места", "info");
+                    } catch (err: any) {
+                      toast(err.message || "Ошибка", "err");
+                    } finally {
+                      setLoading(false);
+                    }
+                  }
+                }}>
                 {unseated.map(([u, r]) => (
-                  <PlayerChip key={u} uid={u} nick={s.users[u]?.nickname ?? "?"} num={r.playerNumber} seat={null} user={s.users[u]}
+                  <PlayerChip key={u} uid={u} nick={users[u]?.nickname ?? "?"} num={r.playerNumber} seat={null} user={users[u]}
                     warn={r.playerNumber == null}
                     sel={selUid === u} onSelect={() => setSelUid(selUid === u ? null : u)} onDrag={setDragUid} ro={ro} />
                 ))}
@@ -653,13 +810,28 @@ export function TournamentSeats({ tid, ro }: { tid: string; ro: boolean }) {
                       {tCodes.map((code) => {
                         const occ = t.tables.seats[code];
                         const occReg = occ ? t.registeredPlayers[occ] : null;
-                        const offBalance = !occ && !isMin; // место за перегруженным столом — вне баланса
+                        const offBalance = !occ && !isMin;
                         return (
                           <div key={code}
                             onDragOver={(e) => e.preventDefault()}
-                            onDrop={(e) => { e.preventDefault(); const u = e.dataTransfer.getData("uid") || dragUid; if (u && !ro) { const err = setSeat(t.id, u, code); if (err) toast(err, "err"); setDragUid(null); } }}
+                            onDrop={async (e) => { 
+                              e.preventDefault(); 
+                              const u = e.dataTransfer.getData("uid") || dragUid; 
+                              if (u && !ro) {
+                                setLoading(true);
+                                try {
+                                  const err = await setSeat(t.id, u, code);
+                                  if (err) toast(err, "err");
+                                  setDragUid(null);
+                                } catch (err: any) {
+                                  toast(err.message || "Ошибка", "err");
+                                } finally {
+                                  setLoading(false);
+                                }
+                              }
+                            }}
                             onClick={() => {
-                              if (ro) return;
+                              if (ro || loading) return;
                               if (occ) { setOccSeat(code); setSelUid(null); }
                               else if (selUid) trySeat(code);
                               else {
@@ -672,11 +844,12 @@ export function TournamentSeats({ tid, ro }: { tid: string; ro: boolean }) {
                               occ ? "border-line bg-white/[0.05] hover:border-warn/50 hover:bg-warn/10" : "border-dashed border-line bg-white/[0.02] hover:border-(--acc-line) hover:bg-(--acc-soft)",
                               selUid && !occ && (isMin ? "border-(--acc-line) bg-(--acc-soft) pulse-live" : "opacity-40 saturate-50"),
                               offBalance && !selUid && "opacity-55")}>
-                            <span className={cn("num absolute left-2 top-1.5 rounded-md px-1.5 py-0.5 text-[10px] font-extrabold", occ ? "bg-(--acc-soft) text-(--acc)" : "bg-white/[0.05] text-dim")}>{code}</span>
+                            <span className={cn("num absolute left-2 top-1.5 rounded-md px-1.5 py-0.5 text-[10px] font-extrabold", 
+                              occ ? "bg-(--acc-soft) text-(--acc)" : "bg-white/[0.05] text-dim")}>{code}</span>
                             {occ ? (
                               <div className="flex h-full flex-col items-center justify-center gap-1.5 p-2 pt-6">
-                                <Avatar user={s.users[occ]} size={34} />
-                                <span className="max-w-full truncate text-[11.5px] font-bold leading-none">{s.users[occ]?.nickname ?? "?"}</span>
+                                <Avatar user={users[occ]} size={34} />
+                                <span className="max-w-full truncate text-[11.5px] font-bold leading-none">{users[occ]?.nickname ?? "?"}</span>
                                 <span className="num text-[10px] font-extrabold text-dim">
                                   {occReg?.playerNumber != null ? `#${occReg.playerNumber}` : "без номера"}
                                 </span>
@@ -699,7 +872,6 @@ export function TournamentSeats({ tid, ro }: { tid: string; ro: boolean }) {
         </Reveal>
       </div>
 
-      {/* ручной выбор игрока на свободное место */}
       <Modal open={!!pickSeat} onClose={() => setPickSeat(null)} title={`Место ${pickSeat ?? ""}`} subtitle="Выберите участника — он будет посажен вручную" w="max-w-md">
         <div className="relative mb-3">
           <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-dim" />
@@ -707,24 +879,31 @@ export function TournamentSeats({ tid, ro }: { tid: string; ro: boolean }) {
         </div>
         <div className="max-h-[320px] space-y-1.5 overflow-y-auto pr-1">
           {unseatedReady
-            .filter(([u]) => ((s.users[u]?.nickname ?? "") + " " + (s.users[u]?.firstName ?? "")).toLowerCase().includes(pickQ.toLowerCase()))
+            .filter(([u]) => ((users[u]?.nickname ?? "") + " " + (users[u]?.firstName ?? "")).toLowerCase().includes(pickQ.toLowerCase()))
             .map(([u, r]) => (
-              <button key={u} onClick={() => {
-                const err = setSeat(t.id, u, pickSeat);
-                if (err) { toast(err, "err"); return; }
-                toast(`${s.users[u]?.nickname} → место ${pickSeat}`);
-                setPickSeat(null);
+              <button key={u} onClick={async () => {
+                setLoading(true);
+                try {
+                  const err = await setSeat(t.id, u, pickSeat);
+                  if (err) { toast(err, "err"); return; }
+                  toast(`${users[u]?.nickname} → место ${pickSeat}`);
+                  setPickSeat(null);
+                } catch (err: any) {
+                  toast(err.message || "Ошибка", "err");
+                } finally {
+                  setLoading(false);
+                }
               }}
                 className="flex w-full items-center gap-3 rounded-xl border border-line bg-white/[0.03] px-3 py-2.5 text-left transition hover:border-(--acc-line) hover:bg-(--acc-soft)">
-                <Avatar user={s.users[u]} size={34} />
+                <Avatar user={users[u]} size={34} />
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[13.5px] font-bold">{s.users[u]?.nickname}</span>
-                  <span className="text-[11.5px] font-semibold text-dim">№ {r.playerNumber} · {s.users[u]?.firstName} {s.users[u]?.lastName}</span>
+                  <span className="block truncate text-[13.5px] font-bold">{users[u]?.nickname}</span>
+                  <span className="text-[11.5px] font-semibold text-dim">№ {r.playerNumber} · {users[u]?.firstName} {users[u]?.lastName}</span>
                 </span>
                 <span className="num rounded-lg bg-(--acc-soft) px-2.5 py-1 text-[12px] font-extrabold text-(--acc)">{pickSeat}</span>
               </button>
             ))}
-          {unseatedReady.filter(([u]) => ((s.users[u]?.nickname ?? "") + " " + (s.users[u]?.firstName ?? "")).toLowerCase().includes(pickQ.toLowerCase())).length === 0 && (
+          {unseatedReady.filter(([u]) => ((users[u]?.nickname ?? "") + " " + (users[u]?.firstName ?? "")).toLowerCase().includes(pickQ.toLowerCase())).length === 0 && (
             <p className="py-6 text-center text-[13px] font-semibold text-dim">
               {noNumCnt > 0 && unseated.length > 0 ? "Все игроки без места пока без номера — присвойте номера в списке слева" : "Нет участников без места — зарегистрируйте игроков слева"}
             </p>
@@ -737,7 +916,6 @@ export function TournamentSeats({ tid, ro }: { tid: string; ro: boolean }) {
         )}
       </Modal>
 
-      {/* действия с занятым местом */}
       <Modal open={!!occSeat} onClose={() => setOccSeat(null)} title={`Место ${occSeat ?? ""}`} subtitle="Занято участником" w="max-w-sm">
         {(() => {
           const u = occSeat ? t.tables.seats[occSeat] : null;
@@ -746,18 +924,25 @@ export function TournamentSeats({ tid, ro }: { tid: string; ro: boolean }) {
           return (
             <div className="space-y-4">
               <div className="flex items-center gap-3.5 rounded-2xl border border-line bg-white/[0.03] p-3.5">
-                <Avatar user={s.users[u]} size={46} ring />
+                <Avatar user={users[u]} size={46} ring />
                 <div>
-                  <p className="font-display text-[15px] font-extrabold">{s.users[u]?.nickname}</p>
-                  <p className="text-[12.5px] font-semibold text-mut">{s.users[u]?.firstName} {s.users[u]?.lastName} · участник № {r.playerNumber ?? "—"}</p>
+                  <p className="font-display text-[15px] font-extrabold">{users[u]?.nickname}</p>
+                  <p className="text-[12.5px] font-semibold text-mut">{users[u]?.firstName} {users[u]?.lastName} · участник № {r.playerNumber ?? "—"}</p>
                   <p className="num mt-0.5 text-[12px] font-extrabold text-(--acc)">{r.playerNumber ?? "—"} — {occSeat}</p>
                 </div>
               </div>
               {!ro && (
-                <Btn variant="soft" className="w-full" onClick={() => {
-                  setSeat(t.id, u, null);
-                  toast(`${s.users[u]?.nickname} возвращён в список без места`, "info");
-                  setOccSeat(null);
+                <Btn variant="soft" className="w-full" onClick={async () => {
+                  setLoading(true);
+                  try {
+                    await setSeat(t.id, u, null);
+                    toast(`${users[u]?.nickname} возвращён в список без места`, "info");
+                    setOccSeat(null);
+                  } catch (err: any) {
+                    toast(err.message || "Ошибка", "err");
+                  } finally {
+                    setLoading(false);
+                  }
                 }}><Users className="size-4" /> Вернуть в «Участники без места»</Btn>
               )}
             </div>
