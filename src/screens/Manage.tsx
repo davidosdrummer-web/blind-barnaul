@@ -225,7 +225,7 @@ export function AdminRating() {
     if (mode === "season") {
       const rating = computeSeasonRating(users, tournaments, sid);
       return rating.map((r) => {
-        const u = users[r.uid];
+        const u = users?.[r.uid];
         return { 
           uid: r.uid, nick: u?.nickname ?? "—", first: u?.firstName ?? "", last: u?.lastName ?? "", 
           user: u!, points: r.points, games: r.games, wins: r.wins, top3: r.top3, ft: r.ft, 

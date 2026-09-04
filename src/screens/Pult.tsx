@@ -380,7 +380,7 @@ export default function Pult({ preselect }: { preselect?: string }) {
           ) : (
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {eliminated.map(([uidv, e]) => {
-                const u = users[uidv];
+                const u = users?.[uidv];
                 const reg = t.registeredPlayers[uidv];
                 const returned = reg && !reg.isEliminated;
                 return (
@@ -392,7 +392,7 @@ export default function Pult({ preselect }: { preselect?: string }) {
                           {reg?.playerNumber && <span className="num ml-1.5 text-[11.5px] text-dim">#{reg.playerNumber}</span>}
                         </p>
                         <p className="truncate text-[11.5px] font-semibold text-dim">
-                          выбит: <span className="text-mut">{e.knockedBy ? users[e.knockedBy]?.nickname ?? "—" : "без нокаута"}</span> · {new Date(e.eliminatedAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}
+                          выбит: <span className="text-mut">{e.knockedBy ? users?.[e.knockedBy]?.nickname ?? "—" : "без нокаута"}</span> · {new Date(e.eliminatedAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}
                         </p>
                       </div>
                       {returned
@@ -454,7 +454,7 @@ export default function Pult({ preselect }: { preselect?: string }) {
             placeholder="— выберите игрока —"
             options={activePlayers.map(([uidv]) => ({ 
               v: uidv, 
-              l: `${users[uidv]?.nickname} · ${fmtNum(t.registeredPlayers[uidv].chips)} фишек` 
+              l: `${users?.[uidv]?.nickname} · ${fmtNum(t.registeredPlayers[uidv].chips)} фишек` 
             }))} 
           />
           <Select 
@@ -464,7 +464,7 @@ export default function Pult({ preselect }: { preselect?: string }) {
             placeholder="— без нокаута —"
             options={activePlayers.filter(([uidv]) => uidv !== outUid).map(([uidv]) => ({ 
               v: uidv, 
-              l: users[uidv]?.nickname ?? uidv 
+              l: users?.[uidv]?.nickname ?? uidv 
             }))} 
           />
           <div className="flex justify-end gap-2">
@@ -490,7 +490,7 @@ export default function Pult({ preselect }: { preselect?: string }) {
             value={bonusUid} 
             onChange={setBonusUid} 
             placeholder="— выберите игрока —"
-            options={activePlayers.map(([uidv]) => ({ v: uidv, l: users[uidv]?.nickname ?? uidv }))} 
+            options={activePlayers.map(([uidv]) => ({ v: uidv, l: users?.[uidv]?.nickname ?? uidv }))} 
           />
           <div className="flex justify-end gap-2">
             <Btn variant="ghost" onClick={() => setModal(null)}>Отмена</Btn>
