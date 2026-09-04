@@ -36,10 +36,10 @@ export default function PlayerHome({ targetUid }: { targetUid?: string }) {
   const [form, setForm] = useState({ nickname: "", firstName: "", lastName: "", phone: "", email: "", hue: 152, avatar: "" });
   
   const uid = targetUid || firebaseUser?.uid;
-  const me = uid ? users[uid] : null;
+  const me = uid ? users?.[uid] : null;
   if (!me) return null;
 
-  const rating = Object.values(users).filter((u) => !u.isArchived).sort((a, b) => b.stats.points - a.stats.points);
+  const rating = Object.values(users || {}).filter((u) => !u.isArchived).sort((a, b) => b.stats.points - a.stats.points);
   const myPlace = rating.findIndex((u) => u.uid === me.uid) + 1;
   const activeT =
     Object.values(tournaments).find((t) => t.status === "active" && t.registeredPlayers[me.uid]) ??
@@ -238,7 +238,7 @@ export function PlayerTournaments() {
   const { firebaseUser } = useAuth();
   const [loading, setLoading] = useState(false);
   
-  const me = firebaseUser ? users[firebaseUser.uid] : null;
+  const me = firebaseUser ? users?.[firebaseUser.uid] : null;
   if (!me) return null;
   
   const open = Object.values(tournaments)
@@ -481,7 +481,7 @@ export function PlayerRating({ targetUid }: { targetUid?: string }) {
   const rows = useMemo(() => {
     if (!users || Object.keys(users).length === 0) return [];
     if (mode === "all") {
-      return Object.values(users).filter((u) => !u.isArchived).sort((a, b) => b.stats.points - a.stats.points)
+      return Object.values(users || {}).filter((u) => !u.isArchived).sort((a, b) => b.stats.points - a.stats.points)
         .map((u, i) => ({ uid: u.uid, place: i + 1, points: u.stats.points, games: u.stats.totalTournaments, wins: u.stats.wins }));
     }
     const rating = computeSeasonRating(users, tournaments, sid);

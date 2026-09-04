@@ -48,7 +48,7 @@ export function Members({ ro }: { ro: boolean }) {
 
   const usersList = useMemo(() => {
     if (!users) return [];
-    const usersArray = Object.values(users);
+    const usersArray = Object.values(users || {});
     if (usersArray.length === 0) return [];
     return usersArray
       .filter((u) => u && (showHidden || (!u.isArchived && !u.isBlocked)))
@@ -233,7 +233,7 @@ export function AdminRating() {
         };
       }).filter((r) => r.user);
     }
-    return Object.values(users).filter((u) => !u.isArchived).map((u) => ({
+    return Object.values(users || {}).filter((u) => !u.isArchived).map((u) => ({
       uid: u.uid, nick: u.nickname, first: u.firstName, last: u.lastName, user: u,
       points: u.stats.points, games: u.stats.totalTournaments, wins: u.stats.wins, top3: u.stats.top3,
       ft: u.stats.finalTables, best: u.stats.bestScore, kos: u.stats.knockouts, rebs: u.stats.rebuy + u.stats.addon,

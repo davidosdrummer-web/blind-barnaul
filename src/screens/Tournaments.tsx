@@ -30,7 +30,7 @@ export default function TournamentsList() {
   const [res, setRes] = useState<Tournament | null>(null);
   const [loading, setLoading] = useState(false);
   
-  const me = firebaseUser ? users[firebaseUser.uid] : null;
+  const me = firebaseUser ? users?.[firebaseUser.uid] : null;
   const isAdmin = me?.role === "admin";
 
   const groups: Record<string, Tournament[]> = { active: [], planned: [], completed: [] };

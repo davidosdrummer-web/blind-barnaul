@@ -304,7 +304,7 @@ export function TvRanking() {
 
   const rows = useMemo(() => {
     if (mode === "all") {
-      return Object.values(users).filter((u) => !u.isArchived).sort((a, b) => b.stats.points - a.stats.points).slice(0, 20)
+      return Object.values(users || {}).filter((u) => !u.isArchived).sort((a, b) => b.stats.points - a.stats.points).slice(0, 20)
         .map((u, i) => ({ uid: u.uid, place: i + 1, points: u.stats.points, games: u.stats.totalTournaments, wins: u.stats.wins }));
     }
     const sn = seasonsList[mode]; if (!sn) return [];
