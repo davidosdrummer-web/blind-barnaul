@@ -43,7 +43,7 @@ function useSectionRenderer(view: "club" | "player", selectedUid?: string) {
   
   // Если режим игрока и выбран конкретный UID (для админа), используем его
   const targetUid = view === "player" && selectedUid ? selectedUid : firebaseUser?.uid;
-  const me = targetUid ? users[targetUid] : null;
+  const me = targetUid ? users?.[targetUid] : null;
   
   if (loading || !me) return null;
   
@@ -86,7 +86,7 @@ export default function Shell() {
   const { firebaseUser } = useAuth();
   const nav = useNavigate();
   const { section = "" } = useParams();
-  const me = firebaseUser ? users[firebaseUser.uid] : null;
+  const me = firebaseUser ? users?.[firebaseUser.uid] : null;
   
   // Хук useState должен быть вызван ДО любых условных возвратов
   const [view, setView] = useState<"club" | "player">(me?.role === "admin" ? "club" : "player");

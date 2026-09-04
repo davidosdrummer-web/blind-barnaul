@@ -84,10 +84,10 @@ export async function adminSaveUser(targetUid: string | null, data: {
 }): Promise<string | null> {
   const usersSnap = await get(ref(db, "users"));
   const users = usersSnap.val() || {};
-  const dup = Object.values(users).find((u: any) => u.nickname.toLowerCase() === data.nickname.toLowerCase() && u.uid !== targetUid);
+  const dup = Object.values(users || {}).find((u: any) => u.nickname.toLowerCase() === data.nickname.toLowerCase() && u.uid !== targetUid);
   if (dup) return "Никнейм уже занят";
   
-  if (targetUid && users[targetUid]) {
+  if (targetUid && users?.[targetUid]) {
     const u = users[targetUid];
     await update(ref(db, `users/${targetUid}`), {
       nickname: data.nickname,
