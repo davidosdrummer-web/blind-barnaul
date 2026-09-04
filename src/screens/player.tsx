@@ -477,7 +477,7 @@ export function PlayerRating() {
   if (!me) return null;
 
   const rows = useMemo(() => {
-    if (Object.keys(users).length === 0) return [];
+    if (!users || Object.keys(users).length === 0) return [];
     if (mode === "all") {
       return Object.values(users).filter((u) => !u.isArchived).sort((a, b) => b.stats.points - a.stats.points)
         .map((u, i) => ({ uid: u.uid, place: i + 1, points: u.stats.points, games: u.stats.totalTournaments, wins: u.stats.wins }));

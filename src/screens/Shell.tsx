@@ -86,11 +86,13 @@ export default function Shell() {
   const { section = "" } = useParams();
   const me = firebaseUser ? users[firebaseUser.uid] : null;
   
+  // Хук useState должен быть вызван ДО любых условных возвратов
+  const [view, setView] = useState<"club" | "player">(me?.role === "admin" ? "club" : "player");
+  
   if (loading || !me) return null;
   
   const isOp = me.role !== "player";
   const isAdmin = me.role === "admin";
-  const [view, setView] = useState<"club" | "player">(isAdmin ? "club" : "player");
   const navItems = (view === "player" ? playerNav : clubNav.filter((n) => !n.adminOnly || isAdmin));
   const unread = Object.values(me.notifications || {}).filter((n) => !n.read).length;
   const activeT = Object.values(tournaments).find((t) => t.status === "active");

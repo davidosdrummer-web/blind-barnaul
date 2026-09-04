@@ -462,12 +462,12 @@ export function Seasons({ ro }: { ro: boolean }) {
   const [loading, setLoading] = useState(false);
   
   const season = seasons ? seasons[sid] : undefined;
-  const [tplId, setTplId] = useState(templates ? (Object.keys(templates)[0] ?? "") : "");
+  const [tplId, setTplId] = useState(templates && Object.keys(templates).length > 0 ? (Object.keys(templates)[0] ?? "") : "");
   const [manualUid, setManualUid] = useState("");
   
   if (!season) return <Empty title="Сезон не найден" />;
 
-  const tIds = Object.keys(season.tournaments || {});
+  const tIds = season.tournaments ? Object.keys(season.tournaments) : [];
   const list = tIds.map((id) => tournaments[id]).filter(Boolean);
   const played = list.filter((t) => t.status === "completed").length;
   const live = list.filter((t) => t.status === "active").length;
