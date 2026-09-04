@@ -81,7 +81,8 @@ export function Members({ ro }: { ro: boolean }) {
   };
   
   const lastGame = (u: User) => {
-    const h = Object.values(u.tournamentHistory).sort((a, b) => b.date - a.date)[0];
+    const history = u.tournamentHistory || {};
+    const h = Object.values(history).sort((a, b) => b.date - a.date)[0];
     return h ? fmtDateShort(h.date) : "—";
   };
 
