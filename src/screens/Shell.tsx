@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import { ReactNode, useState } from "react";
 import { NavLink, useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { signOut } from "firebase/auth";
@@ -36,25 +36,28 @@ const clubNav = [
   { k: "settings", label: "Настройки", icon: Settings, adminOnly: true },
 ];
 
-function useSectionRenderer() {
+function useSectionRenderer(view: "club" | "player", selectedUid?: string) {
   const { section = "", p1, p2 } = useParams();
-  const { users, tournaments, seasons, templates, achievements, screens } = useFirebaseData();
+  const { users, tournaments, seasons, templates, achievements, screens, loading } = useFirebaseData();
   const { firebaseUser } = useAuth();
-  const me = firebaseUser ? users[firebaseUser.uid] : null;
-  const isAdmin = me?.role === "admin";
-  const isOp = me?.role !== "player";
-  const view = (me?.role === "player" || !isOp) ? "player" : "club";
-
-  if (!me) return null;
+  
+  // Если режим игрока и выбран конкретный UID (для админа), используем его
+  const targetUid = view === "player" && selectedUid ? selectedUid : firebaseUser?.uid;
+  const me = targetUid ? users[targetUid] : null;
+  
+  if (loading || !me) return null;
+  
+  const isAdmin = me.role === "admin";
+  const isOp = me.role !== "player";
 
   if (view === "player") {
     switch (section) {
       case "tournaments": return <PlayerTournaments />;
       case "stats": return <PlayerStats />;
       case "achievements": return <PlayerAchievements />;
-      case "rating": return <PlayerRating />;
+      case "rating": return <PlayerRating targetUid={targetUid || undefined} />;
       case "notifications": return <PlayerNotifs />;
-      default: return <PlayerHome />;
+      default: return <PlayerHome targetUid={targetUid || undefined} />;
     }
   }
 
@@ -79,17 +82,20 @@ function useSectionRenderer() {
 }
 
 export default function Shell() {
-  const { users, tournaments, club } = useFirebaseData();
+  const { users, tournaments, club, loading } = useFirebaseData();
   const { firebaseUser } = useAuth();
   const nav = useNavigate();
   const { section = "" } = useParams();
   const me = firebaseUser ? users[firebaseUser.uid] : null;
   
-  if (!me) return null;
+  // Хук useState должен быть вызван ДО любых условных возвратов
+  const [view, setView] = useState<"club" | "player">(me?.role === "admin" ? "club" : "player");
+  const [selectedUid, setSelectedUid] = useState<string | undefined>(undefined);
+  
+  if (loading || !me) return null;
   
   const isOp = me.role !== "player";
   const isAdmin = me.role === "admin";
-  const view = me.role === "player" ? "player" : "club";
   const navItems = (view === "player" ? playerNav : clubNav.filter((n) => !n.adminOnly || isAdmin));
   const unread = Object.values(me.notifications || {}).filter((n) => !n.read).length;
   const activeT = Object.values(tournaments).find((t) => t.status === "active");
@@ -106,7 +112,16 @@ export default function Shell() {
   };
 
   const switchView = (v: "club" | "player") => {
+    setView(v);
+    setSelectedUid(undefined); // сбрасываем выбранный UID при переключении
     nav(`/app/${v === "player" ? "home" : "pult"}`);
+  };
+  
+  // Для админа: возможность выбрать конкретного игрока для просмотра его ЛК
+  const selectPlayerView = (uid: string) => {
+    setView("player");
+    setSelectedUid(uid);
+    nav("/app/home");
   };
 
   return (
@@ -283,7 +298,7 @@ export default function Shell() {
             animate={{ opacity: 1, y: 0 }} 
             transition={{ duration: 0.35, ease: [0.2, 0.7, 0.2, 1] }}
           >
-            <UseSection />
+            <UseSection view={view} selectedUid={selectedUid} />
           </motion.div>
         </main>
       </div>
@@ -315,6 +330,6 @@ export default function Shell() {
   );
 }
 
-function UseSection() { 
-  return <>{useSectionRenderer()}</>; 
+function UseSection({ view, selectedUid }: { view: "club" | "player"; selectedUid?: string }) { 
+  return <>{useSectionRenderer(view, selectedUid)}</>; 
 }

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { LogIn, UserPlus, Eye, EyeOff, ShieldCheck } from "lucide-react";
@@ -7,7 +7,7 @@ import {
   createUserWithEmailAndPassword 
 } from "firebase/auth";
 import { auth } from "../firebase";
-import { set, ref, get } from "firebase/database";
+import { set, ref, get, onValue } from "firebase/database";
 import { db } from "../firebase";
 import { Btn, Suit, toast, ChipIcon, Field } from "../lib/ui";
 import { uid, User } from "../lib/db";
@@ -24,6 +24,23 @@ export default function Login() {
     nickname: "", firstName: "", lastName: "", email: "", phone: "", password: "", confirm: "" 
   });
   const [errs, setErrs] = useState<Record<string, string>>({});
+  const [userExistsInDb, setUserExistsInDb] = useState<boolean | null>(null);
+
+  // Проверяем существование пользователя в БД при авторизации
+  useEffect(() => {
+    if (mode === "login" && lg.email.trim()) {
+      // Пытаемся найти пользователя по email в базе данных
+      const usersRef = ref(db, "users");
+      const unsub = onValue(usersRef, (snap) => {
+        const users = snap.val() || {};
+        const found = Object.values(users).some((u: any) => u.email?.toLowerCase() === lg.email.trim().toLowerCase());
+        setUserExistsInDb(found);
+      });
+      return () => unsub();
+    } else {
+      setUserExistsInDb(null);
+    }
+  }, [mode, lg.email]);
 
   const handleLogin = async () => {
     const e: Record<string, string> = {};
@@ -35,7 +52,48 @@ export default function Login() {
     setBusy(true);
     try {
       // ✅ ПРАВИЛЬНО: signInWithEmailAndPassword для входа
-      await signInWithEmailAndPassword(auth, lg.email.trim(), lg.password);
+      const cred = await signInWithEmailAndPassword(auth, lg.email.trim(), lg.password);
+      const uid = cred.user.uid;
+      
+      // Проверяем, существует ли пользователь в Realtime Database
+      const userSnap = await get(ref(db, `users/${uid}`));
+      const userInDb = userSnap.val();
+      
+      if (!userInDb) {
+        // Пользователь есть в Authentication, но нет в Realtime Database
+        // Создаём запись с ролью "player" по умолчанию
+        const usersSnap = await get(ref(db, "users"));
+        const users = usersSnap.val() || {};
+        
+        // Получаем данные из Firebase Auth
+        const authUser = cred.user;
+        
+        const newUser: User = {
+          uid: uid,
+          email: authUser.email || lg.email.trim(),
+          phone: "",
+          role: "player",
+          nickname: authUser.email?.split("@")[0] || "Игрок",
+          firstName: "",
+          lastName: "",
+          hue: Math.floor(Math.random() * 360),
+          registrationDate: Date.now(),
+          isBlocked: false,
+          isArchived: false,
+          stats: { 
+            totalTournaments: 0, wins: 0, top3: 0, finalTables: 0, 
+            knockouts: 0, rebuy: 0, addon: 0, reentry: 0, 
+            bestScore: 0, avgPlace: 0, bestPlace: 0, points: 0 
+          },
+          achievements: {},
+          tournamentHistory: {},
+          notifications: {},
+        };
+        
+        await set(ref(db, `users/${uid}`), newUser);
+        toast("Профиль создан в базе данных", "ok");
+      }
+      
       navigate("/app/home");
     } catch (err: any) {
       console.error("Login error:", err);

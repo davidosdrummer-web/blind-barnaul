@@ -58,6 +58,7 @@ export interface TournamentDraft {
   registrationDuration: number; startingStack: number; finalTablePlayers: number;
   description: string; pointsForKnockout: boolean; knockoutPoints: number;
   rebuyChips: number; reentryChips: number; addonChips: number;
+  isFinal?: boolean;
   structure: { levels: Level[]; breaks: Break[] };
   bonuses: Bonus[]; pointsTable: Record<string, number>;
   tables: { totalTables: number; seatsPerTable: number };
@@ -65,6 +66,7 @@ export interface TournamentDraft {
 export interface TemplateData {
   startingStack: number; finalTablePlayers: number; pointsForKnockout: boolean;
   knockoutPoints: number; rebuyChips: number; reentryChips: number; addonChips: number;
+  isFinal?: boolean;
   registrationDuration: number; description: string;
   structure: { levels: Level[]; breaks: Break[] };
   bonuses: Bonus[]; pointsTable: Record<string, number>;
@@ -236,8 +238,8 @@ export function computeSeasonRating(users: Record<string, User>, tournaments: Re
   const map: Record<string, { uid: string; points: number; games: number; wins: number; top3: number; ft: number; best: number; kos: number; rebs: number }> = {};
   const get = (u: string) => (map[u] ??= { uid: u, points: 0, games: 0, wins: 0, top3: 0, ft: 0, best: 0, kos: 0, rebs: 0 });
   
-  Object.values(tournaments).forEach((t) => {
-    if (t.seasonId !== seasonId || t.status !== "completed" || !t.results) return;
+  Object.values(tournaments || {}).forEach((t) => {
+    if (!t || t.seasonId !== seasonId || t.status !== "completed" || !t.results) return;
     t.results.ranking.forEach((u, i) => {
       const r = get(u); const place = i + 1;
       r.points += t.results!.pointsAwarded[u] ?? 0; r.games++;

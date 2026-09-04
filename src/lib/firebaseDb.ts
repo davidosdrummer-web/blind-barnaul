@@ -11,9 +11,9 @@ import {
 } from "./db";
 
 // ========== ПОДПИСКИ (реактивность) ==========
-export function subscribeClub(callback: (club: Club) => void) {
+export function subscribeClub(callback: (club: Club | null) => void) {
   const clubRef = ref(db, "club");
-  return onValue(clubRef, (snap) => { const val = snap.val(); if (val) callback(val); });
+  return onValue(clubRef, (snap) => { const val = snap.val(); callback(val || null); });
 }
 export function subscribeUsers(callback: (users: Record<string, User>) => void) {
   const usersRef = ref(db, "users");
@@ -205,8 +205,8 @@ export async function saveTournament(id: string | null, draft: TournamentDraft):
     rebuyChips: draft.rebuyChips,
     reentryChips: draft.reentryChips,
     addonChips: draft.addonChips,
-    isFinal: prev?.isFinal,
-    withdrawn: prev?.withdrawn,
+    isFinal: !!(prev?.isFinal ?? (draft.isFinal || false)),
+    withdrawn: prev?.withdrawn ?? 0,
     createdAt: prev?.createdAt ?? Date.now(),
     structure: draft.structure,
     bonuses: draft.bonuses,
@@ -214,7 +214,7 @@ export async function saveTournament(id: string | null, draft: TournamentDraft):
     tables: { totalTables: draft.tables.totalTables, seatsPerTable: draft.tables.seatsPerTable, seats: prev?.tables?.seats ?? {} },
     registeredPlayers: prev?.registeredPlayers ?? {},
     pult: prev?.pult ?? { currentLevel: 1, currentBreak: false, timerStarted: false, timerPaused: false, timeRemaining: 0, elapsedSeconds: 0, knockouts: 0, returns: 0, bonusesGiven: 0, eliminated: {} },
-    results: prev?.results,
+    results: prev?.results ?? {},
   };
   
   await set(ref(db, `tournaments/${tid}`), newTour);

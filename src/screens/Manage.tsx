@@ -32,7 +32,7 @@ const ACH_ICONS = ["trophy", "medal", "star", "target", "bolt", "shield", "crown
 
 /* ================================ УЧАСТНИКИ ================================ */
 export function Members({ ro }: { ro: boolean }) {
-  const { users } = useFirebaseData();
+  const { users, loading } = useFirebaseData();
   const { firebaseUser } = useAuth();
   const [q, setQ] = useState("");
   const [roleF, setRoleF] = useState("all");
@@ -40,17 +40,22 @@ export function Members({ ro }: { ro: boolean }) {
   const [editU, setEditU] = useState<User | null>(null);
   const [isNew, setIsNew] = useState(false);
   const [delU, setDelU] = useState<User | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loadingState, setLoadingState] = useState(false);
   const [form, setForm] = useState({ 
     nickname: "", firstName: "", lastName: "", email: "", phone: "", 
     role: "player" as Role, startPoints: 0, hue: 205 
   });
 
-  const usersList = Object.values(users)
-    .filter((u) => showHidden || (!u.isArchived && !u.isBlocked))
-    .filter((u) => roleF === "all" || u.role === roleF)
-    .filter((u) => (u.nickname + u.firstName + u.lastName + u.email).toLowerCase().includes(q.toLowerCase()))
-    .sort((a, b) => b.stats.points - a.stats.points);
+  const usersList = useMemo(() => {
+    if (!users) return [];
+    const usersArray = Object.values(users);
+    if (usersArray.length === 0) return [];
+    return usersArray
+      .filter((u) => u && (showHidden || (!u.isArchived && !u.isBlocked)))
+      .filter((u) => roleF === "all" || u.role === roleF)
+      .filter((u) => (u.nickname + u.firstName + u.lastName + u.email).toLowerCase().includes(q.toLowerCase()))
+      .sort((a, b) => (b.stats?.points || 0) - (a.stats?.points || 0));
+  }, [users, q, roleF, showHidden]);
 
   const openEdit = (u: User | null) => {
     setIsNew(!u);
@@ -62,7 +67,7 @@ export function Members({ ro }: { ro: boolean }) {
   
   const save = async () => {
     if (!form.nickname.trim() || !form.firstName.trim()) { toast("Никнейм и имя обязательны", "err"); return; }
-    setLoading(true);
+    setLoadingState(true);
     try {
       const err = await adminSaveUser(isNew ? null : editU!.uid, form);
       if (err) { toast(err, "err"); return; }
@@ -71,12 +76,13 @@ export function Members({ ro }: { ro: boolean }) {
     } catch (err: any) {
       toast(err.message || "Ошибка", "err");
     } finally {
-      setLoading(false);
+      setLoadingState(false);
     }
   };
   
   const lastGame = (u: User) => {
-    const h = Object.values(u.tournamentHistory).sort((a, b) => b.date - a.date)[0];
+    const history = u.tournamentHistory || {};
+    const h = Object.values(history).sort((a, b) => b.date - a.date)[0];
     return h ? fmtDateShort(h.date) : "—";
   };
 
@@ -123,25 +129,25 @@ export function Members({ ro }: { ro: boolean }) {
                     <span className="flex justify-end gap-1">
                       <RowBtn title="Редактировать" onClick={() => openEdit(u)}><Pencil className="size-4" /></RowBtn>
                       <RowBtn title={u.isBlocked ? "Разблокировать" : "Заблокировать"} onClick={async () => { 
-                        setLoading(true);
+                        setLoadingState(true);
                         try {
                           await toggleBlock(u.uid); 
                           toast(u.isBlocked ? "Разблокирован" : "Заблокирован", "info"); 
                         } catch (err: any) {
                           toast(err.message || "Ошибка", "err");
                         } finally {
-                          setLoading(false);
+                          setLoadingState(false);
                         }
                       }}><Ban className={cn("size-4", !u.isBlocked && "text-bad")} /></RowBtn>
                       <RowBtn title={u.isArchived ? "Вернуть из архива" : "Архивировать"} onClick={async () => { 
-                        setLoading(true);
+                        setLoadingState(true);
                         try {
                           await toggleArchive(u.uid); 
                           toast(u.isArchived ? "Возвращён из архива" : "Архивирован", "info"); 
                         } catch (err: any) {
                           toast(err.message || "Ошибка", "err");
                         } finally {
-                          setLoading(false);
+                          setLoadingState(false);
                         }
                       }}><Archive className="size-4" /></RowBtn>
                       <RowBtn title="Удалить" onClick={() => setDelU(u)}><Trash2 className="size-4 text-bad" /></RowBtn>
@@ -172,7 +178,7 @@ export function Members({ ro }: { ro: boolean }) {
         </div>
         <div className="mt-5 flex justify-end gap-2">
           <Btn variant="ghost" onClick={() => setEditU(null)}>Отмена</Btn>
-          <Btn onClick={save} disabled={loading}><Save className="size-4" /> Сохранить</Btn>
+          <Btn onClick={save} disabled={loadingState}><Save className="size-4" /> Сохранить</Btn>
         </div>
       </Modal>
 
@@ -182,18 +188,18 @@ export function Members({ ro }: { ro: boolean }) {
           <Btn variant="ghost" onClick={() => setDelU(null)}>Отмена</Btn>
           <Btn variant="danger" onClick={async () => { 
             if (delU) { 
-              setLoading(true);
+              setLoadingState(true);
               try {
                 await removeUser(delU.uid); 
                 toast("Участник удалён", "info"); 
               } catch (err: any) {
                 toast(err.message || "Ошибка", "err");
               } finally {
-                setLoading(false);
+                setLoadingState(false);
               }
             } 
             setDelU(null); 
-          }} disabled={loading}><Trash2 className="size-4" /> Удалить</Btn>
+          }} disabled={loadingState}><Trash2 className="size-4" /> Удалить</Btn>
         </div>
       </Modal>
     </div>
@@ -208,13 +214,14 @@ function RowBtn({ children, onClick, title }: { children: React.ReactNode; onCli
 export function AdminRating() {
   const { users, tournaments, seasons } = useFirebaseData();
   const [mode, setMode] = useState<"all" | "season">("all");
-  const seasonsList = Object.values(seasons).sort((a, b) => Number(b.isActive) - Number(a.isActive));
+  const seasonsList = useMemo(() => Object.values(seasons || {}).sort((a, b) => Number(b.isActive) - Number(a.isActive)), [seasons]);
   const [sid, setSid] = useState(seasonsList.find((x) => x.isActive)?.id ?? seasonsList[0]?.id ?? "");
   const [sortK, setSortK] = useState("points");
   const [dir, setDir] = useState(-1);
 
   type Row = { uid: string; nick: string; first: string; last: string; user: User; points: number; games: number; wins: number; top3: number; ft: number; best: number; kos: number; rebs: number };
   const rows: Row[] = useMemo(() => {
+    if (!users || Object.keys(users).length === 0) return [];
     if (mode === "season") {
       const rating = computeSeasonRating(users, tournaments, sid);
       return rating.map((r) => {
@@ -293,7 +300,7 @@ export function Templates({ ro }: { ro: boolean }) {
   const nav = useNavigate();
   const [delT, setDelT] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const tpls = Object.values(templates);
+  const tpls = Object.values(templates || {});
 
   return (
     <div>
@@ -362,7 +369,7 @@ export function Seasons({ ro }: { ro: boolean }) {
   const [editS, setEditS] = useState<{ id: string | null; name: string; start: string; end: string; isActive: boolean } | null>(null);
   const [delS, setDelS] = useState<Season | null>(null);
   const [loading, setLoading] = useState(false);
-  const seasonsList = Object.values(seasons).sort((a, b) => Number(b.isActive) - Number(a.isActive) || b.startDate - a.startDate);
+  const seasonsList = Object.values(seasons || {}).sort((a, b) => Number(b.isActive) - Number(a.isActive) || b.startDate - a.startDate);
 
   return (
     <div>
@@ -370,7 +377,7 @@ export function Seasons({ ro }: { ro: boolean }) {
         right={!ro && <Btn onClick={() => setEditS({ id: null, name: "", start: toISO(Date.now()), end: toISO(Date.now() + 180 * 86400e3), isActive: false })}><Plus className="size-4.5" /> Создать сезон</Btn>} />
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {seasonsList.map((x, i) => {
-          const cnt = Object.keys(x.tournaments).length;
+          const cnt = Object.keys(x.tournaments || {}).length;
           return (
             <Reveal key={x.id} delay={i * 60} className="h-full">
               <div className="panel flex h-full flex-col p-5 transition-transform duration-300 hover:-translate-y-1">
@@ -456,20 +463,25 @@ export function Seasons({ ro }: { ro: boolean }) {
   const { users, tournaments, seasons, templates } = useFirebaseData();
   const nav = useNavigate();
   const [loading, setLoading] = useState(false);
-  const season = seasons[sid];
-  const [tplId, setTplId] = useState(Object.keys(templates)[0] ?? "");
+  
+  const season = seasons ? seasons[sid] : undefined;
+  const templatesList = templates ? Object.values(templates) : [];
+  const [tplId, setTplId] = useState(templatesList.length > 0 ? (templatesList[0]?.id ?? "") : "");
   const [manualUid, setManualUid] = useState("");
   
   if (!season) return <Empty title="Сезон не найден" />;
 
-  const tIds = Object.keys(season.tournaments);
+  const tIds = season.tournaments ? Object.keys(season.tournaments) : [];
   const list = tIds.map((id) => tournaments[id]).filter(Boolean);
   const played = list.filter((t) => t.status === "completed").length;
   const live = list.filter((t) => t.status === "active").length;
   const planned = list.filter((t) => t.status === "planned").length;
-  const rating = computeSeasonRating(users, tournaments, sid);
+  const rating = computeSeasonRating(users || {}, tournaments, sid);
   const leader = rating[0];
-  const pool = Object.values(users).filter((u) => !u.isArchived && !u.isBlocked && !season.finalTable.manualPlayers.includes(u.uid));
+  const pool = useMemo(() => 
+    Object.values(users || {}).filter((u) => u && !u.isArchived && !u.isBlocked && !(season.finalTable?.manualPlayers || []).includes(u.uid)),
+    [users, season?.finalTable?.manualPlayers]
+  );
 
   const doForm = async () => {
     setLoading(true);
@@ -495,7 +507,7 @@ export function Seasons({ ro }: { ro: boolean }) {
         <Reveal><div className="panel p-4"><p className="lbl">Сыграно турниров</p><p className="num mt-1 text-[26px] font-extrabold text-(--acc)">{played}</p><p className="text-[11.5px] font-bold text-dim">в игре: {live} · в плане: {planned}</p></div></Reveal>
         <Reveal delay={60}><div className="panel p-4"><p className="lbl">Лидер сезона</p><p className="mt-1 truncate font-display text-[17px] font-extrabold">{leader ? users[leader.uid]?.nickname : "—"}</p><p className="text-[11.5px] font-bold text-dim">{leader ? `${fmtNum(leader.points)} очков · ${leader.games} игр` : "нет результатов"}</p></div></Reveal>
         <Reveal delay={120}><div className="panel p-4"><p className="lbl">Участников в зачёте</p><p className="num mt-1 text-[26px] font-extrabold text-(--acc)">{rating.length}</p><p className="text-[11.5px] font-bold text-dim">набрали очки в сезоне</p></div></Reveal>
-        <Reveal delay={180}><div className="panel p-4"><p className="lbl">Финальный стол</p><p className="num mt-1 text-[26px] font-extrabold text-(--acc)">топ-{season.finalTable.places}</p><p className="text-[11.5px] font-bold text-dim">{season.finalTable.finalTournamentId ? "турнир сформирован" : "+ проходки вручную"}</p></div></Reveal>
+        <Reveal delay={180}><div className="panel p-4"><p className="lbl">Финальный стол</p><p className="num mt-1 text-[26px] font-extrabold text-(--acc)">топ-{season.finalTable?.places ?? 9}</p><p className="text-[11.5px] font-bold text-dim">{season.finalTable?.finalTournamentId ? "турнир сформирован" : "+ проходки вручную"}</p></div></Reveal>
       </div>
 
       <div className="mt-4 grid gap-4 xl:grid-cols-2">
@@ -507,7 +519,7 @@ export function Seasons({ ro }: { ro: boolean }) {
                 <div key={r.uid} className="flex items-center gap-3 rounded-xl px-2.5 py-2 hover:bg-white/[0.04]">
                   <span className={cn("num w-7 text-center font-display text-[14px] font-extrabold", i === 0 ? "text-[#ffd76a]" : i < 3 ? "text-(--acc)" : "text-dim")}>{i + 1}</span>
                   <Avatar user={users[r.uid]} size={32} />
-                  <span className="min-w-0 flex-1 truncate text-[13px] font-bold">{users[r.uid]?.nickname}{i < season.finalTable.places && <Badge tone="acc" className="ml-2">финал</Badge>}</span>
+                  <span className="min-w-0 flex-1 truncate text-[13px] font-bold">{users[r.uid]?.nickname}{i < (season.finalTable?.places ?? 9) && <Badge tone="acc" className="ml-2">финал</Badge>}</span>
                   <span className="num text-[13.5px] font-extrabold text-(--acc)">{fmtNum(r.points)}</span>
                 </div>
               ))}
@@ -539,7 +551,7 @@ export function Seasons({ ro }: { ro: boolean }) {
               <p className="lbl relative flex items-center gap-2"><Crown className="size-4 text-[#ffd76a]" /> Финал сезона</p>
               <div className="relative mt-3 space-y-3.5">
                 <Field label="Сколько мест попадает за финальный стол">
-                  <input type="number" className="inp" value={season.finalTable.places} disabled={ro}
+                  <input type="number" className="inp" value={season.finalTable?.places ?? 9} disabled={ro}
                     onChange={async (e) => { 
                       setLoading(true);
                       try {
@@ -560,7 +572,7 @@ export function Seasons({ ro }: { ro: boolean }) {
                     <Btn variant="soft" disabled={ro || !manualUid || loading} onClick={async () => { 
                       setLoading(true);
                       try {
-                        await setSeasonFinal(sid, { manualPlayers: [...season.finalTable.manualPlayers, manualUid] });
+                        await setSeasonFinal(sid, { manualPlayers: [...(season.finalTable?.manualPlayers || []), manualUid] });
                         setManualUid("");
                       } catch (err: any) {
                         toast(err.message || "Ошибка", "err");
@@ -570,15 +582,15 @@ export function Seasons({ ro }: { ro: boolean }) {
                     }}><Plus className="size-4" /></Btn>
                   </div>
                 </Field>
-                {season.finalTable.manualPlayers.length > 0 && (
+                {(season.finalTable?.manualPlayers || []).length > 0 && (
                   <div className="flex flex-wrap gap-1.5">
-                    {season.finalTable.manualPlayers.map((u) => (
+                    {(season.finalTable?.manualPlayers || []).map((u) => (
                       <span key={u} className="inline-flex items-center gap-1.5 rounded-lg bg-(--acc-soft) px-2.5 py-1.5 text-[12px] font-extrabold text-(--acc)">
                         {users[u]?.nickname ?? u}
                         {!ro && <button onClick={async () => { 
                           setLoading(true);
                           try {
-                            await setSeasonFinal(sid, { manualPlayers: season.finalTable.manualPlayers.filter((x) => x !== u) });
+                            await setSeasonFinal(sid, { manualPlayers: (season.finalTable?.manualPlayers || []).filter((x) => x !== u) });
                           } catch (err: any) {
                             toast(err.message || "Ошибка", "err");
                           } finally {
@@ -591,7 +603,7 @@ export function Seasons({ ro }: { ro: boolean }) {
                 )}
                 <Select label="Шаблон финального турнира" value={tplId} onChange={setTplId}
                   options={Object.values(templates).map((t) => ({ v: t.id, l: t.name }))} />
-                {season.finalTable.finalTournamentId && tournaments[season.finalTable.finalTournamentId] ? (
+                {season.finalTable?.finalTournamentId && tournaments[season.finalTable.finalTournamentId] ? (
                   <Btn variant="soft" className="w-full" onClick={() => nav(`/app/tournaments/${season.finalTable.finalTournamentId}/seats`)}>
                     Финал сформирован: «{tournaments[season.finalTable.finalTournamentId].name}» <ChevronRight className="size-4" />
                   </Btn>
@@ -802,7 +814,7 @@ export function SettingsPage() {
             </div>
             <p className="mt-2 text-[12.5px] text-mut">Присваиваются автоматически после каждого завершённого турнира, когда показатель достигает порога.</p>
             <div className="mt-3 space-y-2">
-              {Object.values(achievements).map((a) => (
+              {Object.values(achievements || {}).map((a) => (
                 <div key={a.id} className="flex items-center gap-3 rounded-xl bg-white/[0.03] px-3 py-2.5">
                   <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-(--acc-soft) text-(--acc)"><AchIcon name={a.icon} className="size-4.5" /></span>
                   <span className="min-w-0 flex-1">
@@ -824,7 +836,7 @@ export function SettingsPage() {
               <p className="lbl flex items-center gap-2"><ShieldCheck className="size-4 text-(--acc)" /> Роли и операторы</p>
               <p className="mt-1 text-[12.5px] text-mut">Оператор ведёт пульт и турниры, остальные разделы — только просмотр.</p>
               <div className="mt-3 max-h-[260px] space-y-1.5 overflow-y-auto pr-1">
-                {Object.values(users).filter((u) => !u.isArchived).sort((a, b) => a.nickname.localeCompare(b.nickname)).map((u) => (
+                {Object.values(users || {}).filter((u) => u && !u.isArchived).sort((a, b) => a.nickname.localeCompare(b.nickname)).map((u) => (
                   <div key={u.uid} className="flex items-center gap-2.5 rounded-xl bg-white/[0.03] px-2.5 py-2">
                     <Avatar user={u} size={30} />
                     <span className="min-w-0 flex-1 truncate text-[12.5px] font-bold">{u.nickname}</span>

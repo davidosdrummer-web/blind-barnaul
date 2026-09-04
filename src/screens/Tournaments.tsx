@@ -34,7 +34,7 @@ export default function TournamentsList() {
   const isAdmin = me?.role === "admin";
 
   const groups: Record<string, Tournament[]> = { active: [], planned: [], completed: [] };
-  Object.values(tournaments).forEach((t) => groups[t.status].push(t));
+  Object.values(tournaments || {}).forEach((t) => groups[t.status].push(t));
   (["active", "planned"] as const).forEach((k) => groups[k].sort((a, b) => a.startDate - b.startDate));
   groups.completed.sort((a, b) => (b.results?.completedAt ?? 0) - (a.results?.completedAt ?? 0));
   const list = groups[tab];
@@ -163,11 +163,12 @@ export default function TournamentsList() {
 
 /* ================================ ФОРМА ================================ */
 function defaultDraft(seasons: Record<string, any>): TournamentDraft {
-  const seasonId = Object.values(seasons).find((x) => x.isActive)?.id ?? Object.keys(seasons)[0] ?? "";
+  const seasonId = Object.values(seasons || {}).find((x) => x.isActive)?.id ?? Object.keys(seasons || {})[0] ?? "";
   return {
     name: "", seasonId, startDate: Date.now() + 2 * DAY, startTime: "19:00", registrationDuration: 30,
     startingStack: 15000, finalTablePlayers: 9, description: "", pointsForKnockout: true,
     knockoutPoints: 5, rebuyChips: 15000, reentryChips: 15000, addonChips: 7500,
+    isFinal: false,
     structure: {
       levels: [
         { level: 1, sb: 25, bb: 50, ante: 0, duration: 12 },
@@ -191,10 +192,10 @@ export function TournamentForm({ editId, templateId }: { editId: string | null; 
   
   const editing = editId ? tournaments[editId] : null;
   const tplMode = templateId != null;
-  const srcTpl = tplMode && templateId !== "new" ? templates[templateId] : null;
+  const srcTpl = tplMode && templateId !== "new" ? templates?.[templateId] || null : null;
   
   const [d, setD] = useState<TournamentDraft>(() => {
-    const seasonId = Object.values(seasons).find((x) => x.isActive)?.id ?? Object.keys(seasons)[0] ?? "";
+    const seasonId = Object.values(seasons || {}).find((x) => x.isActive)?.id ?? Object.keys(seasons || {})[0] ?? "";
     if (srcTpl) {
       const td = srcTpl.data;
       return {
@@ -204,6 +205,7 @@ export function TournamentForm({ editId, templateId }: { editId: string | null; 
         pointsForKnockout: td.pointsForKnockout, knockoutPoints: td.knockoutPoints ?? 5,
         rebuyChips: td.rebuyChips ?? td.startingStack, reentryChips: td.reentryChips ?? td.startingStack, 
         addonChips: td.addonChips ?? Math.round(td.startingStack / 2),
+        isFinal: td.isFinal ?? false,
         structure: structuredClone(td.structure), bonuses: structuredClone(td.bonuses),
         pointsTable: { ...td.pointsTable }, tables: { ...td.tables },
       };
@@ -216,6 +218,7 @@ export function TournamentForm({ editId, templateId }: { editId: string | null; 
       pointsForKnockout: editing.pointsForKnockout, knockoutPoints: editing.knockoutPoints ?? 5,
       rebuyChips: editing.rebuyChips ?? editing.startingStack, reentryChips: editing.reentryChips ?? editing.startingStack, 
       addonChips: editing.addonChips ?? Math.round(editing.startingStack / 2),
+      isFinal: editing.isFinal ?? false,
       structure: structuredClone(editing.structure),
       bonuses: structuredClone(editing.bonuses), pointsTable: { ...editing.pointsTable },
       tables: { totalTables: editing.tables.totalTables, seatsPerTable: editing.tables.seatsPerTable },
@@ -573,18 +576,18 @@ export function TournamentSeats({ tid, ro }: { tid: string; ro: boolean }) {
   
   if (!t) return <Empty title="Турнир не найден" />;
 
-  const regs = Object.entries(t.registeredPlayers).sort((a, b) => (a[1].playerNumber ?? 99999) - (b[1].playerNumber ?? 99999));
-  const seatedUids = new Set(Object.values(t.tables.seats));
+  const regs = Object.entries(t.registeredPlayers || {}).sort((a, b) => (a[1].playerNumber ?? 99999) - (b[1].playerNumber ?? 99999));
+  const seatedUids = new Set(Object.values(t.tables?.seats || {}));
   const unseated = regs.filter(([u]) => !seatedUids.has(u));
   const unseatedReady = unseated.filter(([, r]) => r.playerNumber != null);
   const noNumCnt = unseated.length - unseatedReady.length;
   const codes = sortedSeatCodes(t);
-  const pool = Object.values(users).filter((u) => !u.isArchived && !u.isBlocked && !t.registeredPlayers[u.uid]);
+  const pool = Object.values(users || {}).filter((u) => !u.isArchived && !u.isBlocked && !t.registeredPlayers[u.uid]);
   const found = pool.filter((u) => (u.nickname + " " + u.firstName + " " + u.lastName).toLowerCase().includes(q.toLowerCase()));
   const regOpen = lateRegOpen(t);
-  const seatedCnt = Object.values(t.registeredPlayers).filter((r) => r.seatCode).length;
+  const seatedCnt = Object.values(t.registeredPlayers || {}).filter((r) => r.seatCode).length;
   const counts = tableCounts(t);
-  const minCnt = Math.min(...Object.values(counts));
+  const minCnt = Math.min(...Object.values(counts || {}));
   
   const batchToast = (r: { seated: number; skippedNoNumber: number }) => {
     if (r.seated === 0 && r.skippedNoNumber > 0) { toast("Рассадить некого: у всех игроков без места нет номера", "err"); return; }

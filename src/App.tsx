@@ -22,7 +22,7 @@ function ScrollTop() {
 }
 
 export default function App() {
-  const { club } = useFirebaseData();
+  const { club, loading: dataLoading } = useFirebaseData();
   useEffect(() => { if (club) applyTheme(club); }, [club]);
 
   return (
@@ -34,7 +34,7 @@ export default function App() {
         <Route path="/screen/final/:tid" element={<TvFinal />} />
         <Route path="/screen/results/:tid" element={<TvResults />} />
         <Route path="/screen/ranking" element={<TvRanking />} />
-        <Route path="/app/:section?/:p1?/:p2?" element={<Gate><Shell /></Gate>} />
+        <Route path="/app/:section?/:p1?/:p2?" element={<Gate>{dataLoading ? null : <Shell />}</Gate>} />
         <Route path="*" element={<Navigate to="/app/home" replace />} />
       </Routes>
       <Toasts />
