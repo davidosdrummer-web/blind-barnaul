@@ -47,8 +47,10 @@ export function Members({ ro }: { ro: boolean }) {
   });
 
   const usersList = useMemo(() => {
-    if (!users || Object.keys(users).length === 0) return [];
-    return Object.values(users)
+    if (!users) return [];
+    const usersArray = Object.values(users);
+    if (usersArray.length === 0) return [];
+    return usersArray
       .filter((u) => u && (showHidden || (!u.isArchived && !u.isBlocked)))
       .filter((u) => roleF === "all" || u.role === roleF)
       .filter((u) => (u.nickname + u.firstName + u.lastName + u.email).toLowerCase().includes(q.toLowerCase()))
