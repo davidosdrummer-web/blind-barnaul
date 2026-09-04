@@ -58,6 +58,7 @@ export interface TournamentDraft {
   registrationDuration: number; startingStack: number; finalTablePlayers: number;
   description: string; pointsForKnockout: boolean; knockoutPoints: number;
   rebuyChips: number; reentryChips: number; addonChips: number;
+  isFinal?: boolean;
   structure: { levels: Level[]; breaks: Break[] };
   bonuses: Bonus[]; pointsTable: Record<string, number>;
   tables: { totalTables: number; seatsPerTable: number };

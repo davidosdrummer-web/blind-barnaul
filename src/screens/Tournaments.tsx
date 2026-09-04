@@ -34,7 +34,7 @@ export default function TournamentsList() {
   const isAdmin = me?.role === "admin";
 
   const groups: Record<string, Tournament[]> = { active: [], planned: [], completed: [] };
-  Object.values(tournaments).forEach((t) => groups[t.status].push(t));
+  Object.values(tournaments || {}).forEach((t) => groups[t.status].push(t));
   (["active", "planned"] as const).forEach((k) => groups[k].sort((a, b) => a.startDate - b.startDate));
   groups.completed.sort((a, b) => (b.results?.completedAt ?? 0) - (a.results?.completedAt ?? 0));
   const list = groups[tab];
@@ -163,11 +163,12 @@ export default function TournamentsList() {
 
 /* ================================ ФОРМА ================================ */
 function defaultDraft(seasons: Record<string, any>): TournamentDraft {
-  const seasonId = Object.values(seasons).find((x) => x.isActive)?.id ?? Object.keys(seasons)[0] ?? "";
+  const seasonId = Object.values(seasons || {}).find((x) => x.isActive)?.id ?? Object.keys(seasons || {})[0] ?? "";
   return {
     name: "", seasonId, startDate: Date.now() + 2 * DAY, startTime: "19:00", registrationDuration: 30,
     startingStack: 15000, finalTablePlayers: 9, description: "", pointsForKnockout: true,
     knockoutPoints: 5, rebuyChips: 15000, reentryChips: 15000, addonChips: 7500,
+    isFinal: false,
     structure: {
       levels: [
         { level: 1, sb: 25, bb: 50, ante: 0, duration: 12 },
@@ -194,7 +195,7 @@ export function TournamentForm({ editId, templateId }: { editId: string | null; 
   const srcTpl = tplMode && templateId !== "new" ? templates[templateId] : null;
   
   const [d, setD] = useState<TournamentDraft>(() => {
-    const seasonId = Object.values(seasons).find((x) => x.isActive)?.id ?? Object.keys(seasons)[0] ?? "";
+    const seasonId = Object.values(seasons || {}).find((x) => x.isActive)?.id ?? Object.keys(seasons || {})[0] ?? "";
     if (srcTpl) {
       const td = srcTpl.data;
       return {

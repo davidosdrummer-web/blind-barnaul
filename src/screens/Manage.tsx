@@ -211,7 +211,7 @@ function RowBtn({ children, onClick, title }: { children: React.ReactNode; onCli
 export function AdminRating() {
   const { users, tournaments, seasons } = useFirebaseData();
   const [mode, setMode] = useState<"all" | "season">("all");
-  const seasonsList = useMemo(() => Object.values(seasons).sort((a, b) => Number(b.isActive) - Number(a.isActive)), [seasons]);
+  const seasonsList = useMemo(() => Object.values(seasons || {}).sort((a, b) => Number(b.isActive) - Number(a.isActive)), [seasons]);
   const [sid, setSid] = useState(seasonsList.find((x) => x.isActive)?.id ?? seasonsList[0]?.id ?? "");
   const [sortK, setSortK] = useState("points");
   const [dir, setDir] = useState(-1);
@@ -297,7 +297,7 @@ export function Templates({ ro }: { ro: boolean }) {
   const nav = useNavigate();
   const [delT, setDelT] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const tpls = Object.values(templates);
+  const tpls = Object.values(templates || {});
 
   return (
     <div>
@@ -366,7 +366,7 @@ export function Seasons({ ro }: { ro: boolean }) {
   const [editS, setEditS] = useState<{ id: string | null; name: string; start: string; end: string; isActive: boolean } | null>(null);
   const [delS, setDelS] = useState<Season | null>(null);
   const [loading, setLoading] = useState(false);
-  const seasonsList = Object.values(seasons).sort((a, b) => Number(b.isActive) - Number(a.isActive) || b.startDate - a.startDate);
+  const seasonsList = Object.values(seasons || {}).sort((a, b) => Number(b.isActive) - Number(a.isActive) || b.startDate - a.startDate);
 
   return (
     <div>
@@ -374,7 +374,7 @@ export function Seasons({ ro }: { ro: boolean }) {
         right={!ro && <Btn onClick={() => setEditS({ id: null, name: "", start: toISO(Date.now()), end: toISO(Date.now() + 180 * 86400e3), isActive: false })}><Plus className="size-4.5" /> Создать сезон</Btn>} />
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {seasonsList.map((x, i) => {
-          const cnt = Object.keys(x.tournaments).length;
+          const cnt = Object.keys(x.tournaments || {}).length;
           return (
             <Reveal key={x.id} delay={i * 60} className="h-full">
               <div className="panel flex h-full flex-col p-5 transition-transform duration-300 hover:-translate-y-1">
@@ -461,12 +461,12 @@ export function Seasons({ ro }: { ro: boolean }) {
   const nav = useNavigate();
   const [loading, setLoading] = useState(false);
   const season = seasons[sid];
-  const [tplId, setTplId] = useState(Object.keys(templates)[0] ?? "");
+  const [tplId, setTplId] = useState(Object.keys(templates || {})[0] ?? "");
   const [manualUid, setManualUid] = useState("");
   
   if (!season) return <Empty title="Сезон не найден" />;
 
-  const tIds = Object.keys(season.tournaments);
+  const tIds = Object.keys(season.tournaments || {});
   const list = tIds.map((id) => tournaments[id]).filter(Boolean);
   const played = list.filter((t) => t.status === "completed").length;
   const live = list.filter((t) => t.status === "active").length;
@@ -809,7 +809,7 @@ export function SettingsPage() {
             </div>
             <p className="mt-2 text-[12.5px] text-mut">Присваиваются автоматически после каждого завершённого турнира, когда показатель достигает порога.</p>
             <div className="mt-3 space-y-2">
-              {Object.values(achievements).map((a) => (
+              {Object.values(achievements || {}).map((a) => (
                 <div key={a.id} className="flex items-center gap-3 rounded-xl bg-white/[0.03] px-3 py-2.5">
                   <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-(--acc-soft) text-(--acc)"><AchIcon name={a.icon} className="size-4.5" /></span>
                   <span className="min-w-0 flex-1">
