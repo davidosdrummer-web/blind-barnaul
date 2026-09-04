@@ -214,7 +214,7 @@ export async function saveTournament(id: string | null, draft: TournamentDraft):
     tables: { totalTables: draft.tables.totalTables, seatsPerTable: draft.tables.seatsPerTable, seats: prev?.tables?.seats ?? {} },
     registeredPlayers: prev?.registeredPlayers ?? {},
     pult: prev?.pult ?? { currentLevel: 1, currentBreak: false, timerStarted: false, timerPaused: false, timeRemaining: 0, elapsedSeconds: 0, knockouts: 0, returns: 0, bonusesGiven: 0, eliminated: {} },
-    results: prev?.results,
+    results: prev?.results ?? {},
   };
   
   await set(ref(db, `tournaments/${tid}`), newTour);
