@@ -474,7 +474,7 @@ export function Seasons({ ro }: { ro: boolean }) {
   const rating = computeSeasonRating(users, tournaments, sid);
   const leader = rating[0];
   const pool = useMemo(() => 
-    Object.values(users || {}).filter((u) => u && !u.isArchived && !u.isBlocked && !season.finalTable.manualPlayers.includes(u.uid)),
+    Object.values(users || {}).filter((u) => u && !u.isArchived && !u.isBlocked && !(season.finalTable?.manualPlayers || []).includes(u.uid)),
     [users, season]
   );
 
@@ -502,7 +502,7 @@ export function Seasons({ ro }: { ro: boolean }) {
         <Reveal><div className="panel p-4"><p className="lbl">Сыграно турниров</p><p className="num mt-1 text-[26px] font-extrabold text-(--acc)">{played}</p><p className="text-[11.5px] font-bold text-dim">в игре: {live} · в плане: {planned}</p></div></Reveal>
         <Reveal delay={60}><div className="panel p-4"><p className="lbl">Лидер сезона</p><p className="mt-1 truncate font-display text-[17px] font-extrabold">{leader ? users[leader.uid]?.nickname : "—"}</p><p className="text-[11.5px] font-bold text-dim">{leader ? `${fmtNum(leader.points)} очков · ${leader.games} игр` : "нет результатов"}</p></div></Reveal>
         <Reveal delay={120}><div className="panel p-4"><p className="lbl">Участников в зачёте</p><p className="num mt-1 text-[26px] font-extrabold text-(--acc)">{rating.length}</p><p className="text-[11.5px] font-bold text-dim">набрали очки в сезоне</p></div></Reveal>
-        <Reveal delay={180}><div className="panel p-4"><p className="lbl">Финальный стол</p><p className="num mt-1 text-[26px] font-extrabold text-(--acc)">топ-{season.finalTable.places}</p><p className="text-[11.5px] font-bold text-dim">{season.finalTable.finalTournamentId ? "турнир сформирован" : "+ проходки вручную"}</p></div></Reveal>
+        <Reveal delay={180}><div className="panel p-4"><p className="lbl">Финальный стол</p><p className="num mt-1 text-[26px] font-extrabold text-(--acc)">топ-{season.finalTable?.places ?? 9}</p><p className="text-[11.5px] font-bold text-dim">{season.finalTable?.finalTournamentId ? "турнир сформирован" : "+ проходки вручную"}</p></div></Reveal>
       </div>
 
       <div className="mt-4 grid gap-4 xl:grid-cols-2">
@@ -514,7 +514,7 @@ export function Seasons({ ro }: { ro: boolean }) {
                 <div key={r.uid} className="flex items-center gap-3 rounded-xl px-2.5 py-2 hover:bg-white/[0.04]">
                   <span className={cn("num w-7 text-center font-display text-[14px] font-extrabold", i === 0 ? "text-[#ffd76a]" : i < 3 ? "text-(--acc)" : "text-dim")}>{i + 1}</span>
                   <Avatar user={users[r.uid]} size={32} />
-                  <span className="min-w-0 flex-1 truncate text-[13px] font-bold">{users[r.uid]?.nickname}{i < season.finalTable.places && <Badge tone="acc" className="ml-2">финал</Badge>}</span>
+                  <span className="min-w-0 flex-1 truncate text-[13px] font-bold">{users[r.uid]?.nickname}{i < (season.finalTable?.places ?? 9) && <Badge tone="acc" className="ml-2">финал</Badge>}</span>
                   <span className="num text-[13.5px] font-extrabold text-(--acc)">{fmtNum(r.points)}</span>
                 </div>
               ))}
@@ -546,7 +546,7 @@ export function Seasons({ ro }: { ro: boolean }) {
               <p className="lbl relative flex items-center gap-2"><Crown className="size-4 text-[#ffd76a]" /> Финал сезона</p>
               <div className="relative mt-3 space-y-3.5">
                 <Field label="Сколько мест попадает за финальный стол">
-                  <input type="number" className="inp" value={season.finalTable.places} disabled={ro}
+                  <input type="number" className="inp" value={season.finalTable?.places ?? 9} disabled={ro}
                     onChange={async (e) => { 
                       setLoading(true);
                       try {
@@ -567,7 +567,7 @@ export function Seasons({ ro }: { ro: boolean }) {
                     <Btn variant="soft" disabled={ro || !manualUid || loading} onClick={async () => { 
                       setLoading(true);
                       try {
-                        await setSeasonFinal(sid, { manualPlayers: [...season.finalTable.manualPlayers, manualUid] });
+                        await setSeasonFinal(sid, { manualPlayers: [...(season.finalTable?.manualPlayers || []), manualUid] });
                         setManualUid("");
                       } catch (err: any) {
                         toast(err.message || "Ошибка", "err");
@@ -577,15 +577,15 @@ export function Seasons({ ro }: { ro: boolean }) {
                     }}><Plus className="size-4" /></Btn>
                   </div>
                 </Field>
-                {season.finalTable.manualPlayers.length > 0 && (
+                {(season.finalTable?.manualPlayers || []).length > 0 && (
                   <div className="flex flex-wrap gap-1.5">
-                    {season.finalTable.manualPlayers.map((u) => (
+                    {(season.finalTable?.manualPlayers || []).map((u) => (
                       <span key={u} className="inline-flex items-center gap-1.5 rounded-lg bg-(--acc-soft) px-2.5 py-1.5 text-[12px] font-extrabold text-(--acc)">
                         {users[u]?.nickname ?? u}
                         {!ro && <button onClick={async () => { 
                           setLoading(true);
                           try {
-                            await setSeasonFinal(sid, { manualPlayers: season.finalTable.manualPlayers.filter((x) => x !== u) });
+                            await setSeasonFinal(sid, { manualPlayers: (season.finalTable?.manualPlayers || []).filter((x) => x !== u) });
                           } catch (err: any) {
                             toast(err.message || "Ошибка", "err");
                           } finally {
@@ -598,7 +598,7 @@ export function Seasons({ ro }: { ro: boolean }) {
                 )}
                 <Select label="Шаблон финального турнира" value={tplId} onChange={setTplId}
                   options={Object.values(templates).map((t) => ({ v: t.id, l: t.name }))} />
-                {season.finalTable.finalTournamentId && tournaments[season.finalTable.finalTournamentId] ? (
+                {season.finalTable?.finalTournamentId && tournaments[season.finalTable.finalTournamentId] ? (
                   <Btn variant="soft" className="w-full" onClick={() => nav(`/app/tournaments/${season.finalTable.finalTournamentId}/seats`)}>
                     Финал сформирован: «{tournaments[season.finalTable.finalTournamentId].name}» <ChevronRight className="size-4" />
                   </Btn>
