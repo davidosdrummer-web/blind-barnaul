@@ -463,7 +463,7 @@ export function PlayerAchievements() {
 }
 
 /* ============================== РЕЙТИНГ ============================== */
-export function PlayerRating() {
+export function PlayerRating({ targetUid }: { targetUid?: string }) {
   const { users, tournaments, seasons, loading } = useFirebaseData();
   const { firebaseUser } = useAuth();
   const [mode, setMode] = useState<"season" | "all">("season");
@@ -472,10 +472,10 @@ export function PlayerRating() {
   const activeSeason = seasonsList.find((x) => x.isActive);
   const [sid, setSid] = useState(activeSeason?.id ?? seasonsList[0]?.id ?? "");
   
-  if (loading || !users) return null;
+  const uid = targetUid || firebaseUser?.uid;
+  const me = uid && users ? users[uid] : null;
   
-  const me = firebaseUser ? users[firebaseUser.uid] : null;
-  if (!me) return null;
+  if (loading || !users || !me) return null;
 
   const rows = useMemo(() => {
     if (!users || Object.keys(users).length === 0) return [];

@@ -55,9 +55,9 @@ function useSectionRenderer(view: "club" | "player", selectedUid?: string) {
       case "tournaments": return <PlayerTournaments />;
       case "stats": return <PlayerStats />;
       case "achievements": return <PlayerAchievements />;
-      case "rating": return <PlayerRating />;
+      case "rating": return <PlayerRating targetUid={targetUid || undefined} />;
       case "notifications": return <PlayerNotifs />;
-      default: return <PlayerHome />;
+      default: return <PlayerHome targetUid={targetUid || undefined} />;
     }
   }
 
