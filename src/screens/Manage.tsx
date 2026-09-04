@@ -856,14 +856,7 @@ export function SettingsPage() {
             <div className="panel border-bad/25 p-5">
               <p className="lbl flex items-center gap-2"><RotateCcw className="size-4 text-bad" /> Демо-данные</p>
               <p className="mt-1 text-[12.5px] text-mut">Вернуть платформу к исходному состоянию — все изменения будут потеряны.</p>
-              <Btn variant="danger" size="sm" className="mt-3" onClick={async () => { 
-                try {
-                  await resetDemo(); 
-                  toast("Демо-данные восстановлены", "info"); 
-                } catch (err: any) {
-                  toast(err.message || "Ошибка", "err");
-                }
-              }}><RotateCcw className="size-4" /> Сбросить данные</Btn>
+              <Btn variant="danger" size="sm" className="mt-3" disabled title="Функция восстановления пока недоступна"><RotateCcw className="size-4" /> Сбросить данные</Btn>
             </div>
           </Reveal>
         </div>

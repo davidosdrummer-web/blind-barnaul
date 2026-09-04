@@ -233,11 +233,11 @@ export default function PlayerHome() {
 }
 /* ============================== ТУРНИРЫ ============================== */
 export function PlayerTournaments() {
-  const { tournaments, seasons } = useFirebaseData();
+  const { users, tournaments, seasons } = useFirebaseData();
   const { firebaseUser } = useAuth();
   const [loading, setLoading] = useState(false);
   
-  const me = firebaseUser ? tournaments[firebaseUser.uid] : null;
+  const me = firebaseUser ? users[firebaseUser.uid] : null;
   if (!me) return null;
   
   const open = Object.values(tournaments)
@@ -348,10 +348,10 @@ export function PlayerTournaments() {
 
 /* ============================== СТАТИСТИКА ============================== */
 export function PlayerStats() {
-  const { tournaments, seasons } = useFirebaseData();
+  const { users, tournaments, seasons } = useFirebaseData();
   const { firebaseUser } = useAuth();
   
-  const me = firebaseUser ? tournaments[firebaseUser.uid] : null;
+  const me = firebaseUser ? users[firebaseUser.uid] : null;
   if (!me) return null;
   
   const stt = me.stats;
@@ -392,10 +392,10 @@ export function PlayerStats() {
 }
 /* ============================== ДОСТИЖЕНИЯ ============================== */
 export function PlayerAchievements() {
-  const { achievements } = useFirebaseData();
+  const { users, achievements } = useFirebaseData();
   const { firebaseUser } = useAuth();
   
-  const me = firebaseUser ? achievements[firebaseUser.uid] : null;
+  const me = firebaseUser ? users[firebaseUser.uid] : null;
   if (!me) return null;
   
   const achs = Object.values(achievements).sort((a, b) => a.createdAt - b.createdAt);

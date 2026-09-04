@@ -8,7 +8,7 @@ import {
 import { useFirebaseData } from "../lib/useFirebaseData";
 import { useAuth } from "../lib/useAuth";
 import {
-  Tournament, TournamentDraft, capacity, lateRegOpen,
+  Tournament, TournamentDraft, TemplateData, User, capacity, lateRegOpen, sortedSeatCodes, tableCounts, balanceErrorForSeat,
   fmtDate, fmtNum, fmtDateShort, plural, DAY, uid as genId,
 } from "../lib/db";
 import {
@@ -532,15 +532,15 @@ function IconBtn({ children, onClick, disabled, danger }: { children: React.Reac
   );
 }
 
-function NumField({ value, onCommit, disabled, title }: { value: number | null; onCommit: (raw: string) => string | null; disabled?: boolean; title?: string }) {
+function NumField({ value, onCommit, disabled, title }: { value: number | null; onCommit: (raw: string) => string | null | Promise<string | null>; disabled?: boolean; title?: string }) {
   const [draft, setDraft] = useState(value == null ? "" : String(value));
   const [focus, setFocus] = useState(false);
   useEffect(() => { if (!focus) setDraft(value == null ? "" : String(value)); }, [value, focus]);
-  const commit = (raw: string) => {
+  const commit = async (raw: string) => {
     const clean = raw.trim();
     const target = clean === "" ? null : Math.max(1, Math.floor(+clean || 0));
     if (target === value) { setDraft(target == null ? "" : String(target)); return; }
-    const err = onCommit(clean);
+    const err = await onCommit(clean);
     if (err) { toast(err, "err"); setDraft(value == null ? "" : String(value)); return; }
     setDraft(target == null ? "" : String(target));
   };
@@ -551,7 +551,7 @@ function NumField({ value, onCommit, disabled, title }: { value: number | null; 
       value={draft}
       onChange={(e) => setDraft(e.target.value.replace(/[^\d]/g, "").slice(0, 4))}
       onFocus={() => setFocus(true)}
-      onBlur={(e) => { setFocus(false); commit(e.target.value); }}
+      onBlur={(e) => { setFocus(false); void commit(e.target.value); }}
       onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
     />
   );
