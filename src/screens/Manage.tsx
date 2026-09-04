@@ -47,7 +47,7 @@ export function Members({ ro }: { ro: boolean }) {
   });
 
   const usersList = useMemo(() => {
-    if (!users || Object.keys(users).length === 0) return [];
+    if (!users) return [];
     return Object.values(users)
       .filter((u) => showHidden || (!u.isArchived && !u.isBlocked))
       .filter((u) => roleF === "all" || u.role === roleF)
