@@ -475,6 +475,7 @@ export function PlayerRating({ targetUid }: { targetUid?: string }) {
   const uid = targetUid || firebaseUser?.uid;
   const me = uid && users ? users[uid] : null;
   
+  // Проверка после всех хуков
   if (loading || !users || !me) return null;
 
   const rows = useMemo(() => {
