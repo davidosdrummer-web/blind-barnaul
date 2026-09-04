@@ -47,12 +47,12 @@ export function Members({ ro }: { ro: boolean }) {
   });
 
   const usersList = useMemo(() => {
-    if (!users) return [];
+    if (!users || Object.keys(users).length === 0) return [];
     return Object.values(users)
-      .filter((u) => showHidden || (!u.isArchived && !u.isBlocked))
+      .filter((u) => u && (showHidden || (!u.isArchived && !u.isBlocked)))
       .filter((u) => roleF === "all" || u.role === roleF)
       .filter((u) => (u.nickname + u.firstName + u.lastName + u.email).toLowerCase().includes(q.toLowerCase()))
-      .sort((a, b) => b.stats.points - a.stats.points);
+      .sort((a, b) => (b.stats?.points || 0) - (a.stats?.points || 0));
   }, [users, q, roleF, showHidden]);
 
   const openEdit = (u: User | null) => {
