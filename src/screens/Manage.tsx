@@ -32,7 +32,7 @@ const ACH_ICONS = ["trophy", "medal", "star", "target", "bolt", "shield", "crown
 
 /* ================================ УЧАСТНИКИ ================================ */
 export function Members({ ro }: { ro: boolean }) {
-  const { users } = useFirebaseData();
+  const { users, loading } = useFirebaseData();
   const { firebaseUser } = useAuth();
   const [q, setQ] = useState("");
   const [roleF, setRoleF] = useState("all");
@@ -40,17 +40,20 @@ export function Members({ ro }: { ro: boolean }) {
   const [editU, setEditU] = useState<User | null>(null);
   const [isNew, setIsNew] = useState(false);
   const [delU, setDelU] = useState<User | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loadingState, setLoadingState] = useState(false);
   const [form, setForm] = useState({ 
     nickname: "", firstName: "", lastName: "", email: "", phone: "", 
     role: "player" as Role, startPoints: 0, hue: 205 
   });
 
-  const usersList = Object.values(users)
-    .filter((u) => showHidden || (!u.isArchived && !u.isBlocked))
-    .filter((u) => roleF === "all" || u.role === roleF)
-    .filter((u) => (u.nickname + u.firstName + u.lastName + u.email).toLowerCase().includes(q.toLowerCase()))
-    .sort((a, b) => b.stats.points - a.stats.points);
+  const usersList = useMemo(() => {
+    if (!users || Object.keys(users).length === 0) return [];
+    return Object.values(users)
+      .filter((u) => showHidden || (!u.isArchived && !u.isBlocked))
+      .filter((u) => roleF === "all" || u.role === roleF)
+      .filter((u) => (u.nickname + u.firstName + u.lastName + u.email).toLowerCase().includes(q.toLowerCase()))
+      .sort((a, b) => b.stats.points - a.stats.points);
+  }, [users, q, roleF, showHidden]);
 
   const openEdit = (u: User | null) => {
     setIsNew(!u);
@@ -62,7 +65,7 @@ export function Members({ ro }: { ro: boolean }) {
   
   const save = async () => {
     if (!form.nickname.trim() || !form.firstName.trim()) { toast("Никнейм и имя обязательны", "err"); return; }
-    setLoading(true);
+    setLoadingState(true);
     try {
       const err = await adminSaveUser(isNew ? null : editU!.uid, form);
       if (err) { toast(err, "err"); return; }
@@ -71,7 +74,7 @@ export function Members({ ro }: { ro: boolean }) {
     } catch (err: any) {
       toast(err.message || "Ошибка", "err");
     } finally {
-      setLoading(false);
+      setLoadingState(false);
     }
   };
   
@@ -123,25 +126,25 @@ export function Members({ ro }: { ro: boolean }) {
                     <span className="flex justify-end gap-1">
                       <RowBtn title="Редактировать" onClick={() => openEdit(u)}><Pencil className="size-4" /></RowBtn>
                       <RowBtn title={u.isBlocked ? "Разблокировать" : "Заблокировать"} onClick={async () => { 
-                        setLoading(true);
+                        setLoadingState(true);
                         try {
                           await toggleBlock(u.uid); 
                           toast(u.isBlocked ? "Разблокирован" : "Заблокирован", "info"); 
                         } catch (err: any) {
                           toast(err.message || "Ошибка", "err");
                         } finally {
-                          setLoading(false);
+                          setLoadingState(false);
                         }
                       }}><Ban className={cn("size-4", !u.isBlocked && "text-bad")} /></RowBtn>
                       <RowBtn title={u.isArchived ? "Вернуть из архива" : "Архивировать"} onClick={async () => { 
-                        setLoading(true);
+                        setLoadingState(true);
                         try {
                           await toggleArchive(u.uid); 
                           toast(u.isArchived ? "Возвращён из архива" : "Архивирован", "info"); 
                         } catch (err: any) {
                           toast(err.message || "Ошибка", "err");
                         } finally {
-                          setLoading(false);
+                          setLoadingState(false);
                         }
                       }}><Archive className="size-4" /></RowBtn>
                       <RowBtn title="Удалить" onClick={() => setDelU(u)}><Trash2 className="size-4 text-bad" /></RowBtn>
@@ -172,7 +175,7 @@ export function Members({ ro }: { ro: boolean }) {
         </div>
         <div className="mt-5 flex justify-end gap-2">
           <Btn variant="ghost" onClick={() => setEditU(null)}>Отмена</Btn>
-          <Btn onClick={save} disabled={loading}><Save className="size-4" /> Сохранить</Btn>
+          <Btn onClick={save} disabled={loadingState}><Save className="size-4" /> Сохранить</Btn>
         </div>
       </Modal>
 
@@ -182,18 +185,18 @@ export function Members({ ro }: { ro: boolean }) {
           <Btn variant="ghost" onClick={() => setDelU(null)}>Отмена</Btn>
           <Btn variant="danger" onClick={async () => { 
             if (delU) { 
-              setLoading(true);
+              setLoadingState(true);
               try {
                 await removeUser(delU.uid); 
                 toast("Участник удалён", "info"); 
               } catch (err: any) {
                 toast(err.message || "Ошибка", "err");
               } finally {
-                setLoading(false);
+                setLoadingState(false);
               }
             } 
             setDelU(null); 
-          }} disabled={loading}><Trash2 className="size-4" /> Удалить</Btn>
+          }} disabled={loadingState}><Trash2 className="size-4" /> Удалить</Btn>
         </div>
       </Modal>
     </div>
@@ -208,13 +211,14 @@ function RowBtn({ children, onClick, title }: { children: React.ReactNode; onCli
 export function AdminRating() {
   const { users, tournaments, seasons } = useFirebaseData();
   const [mode, setMode] = useState<"all" | "season">("all");
-  const seasonsList = Object.values(seasons).sort((a, b) => Number(b.isActive) - Number(a.isActive));
+  const seasonsList = useMemo(() => Object.values(seasons).sort((a, b) => Number(b.isActive) - Number(a.isActive)), [seasons]);
   const [sid, setSid] = useState(seasonsList.find((x) => x.isActive)?.id ?? seasonsList[0]?.id ?? "");
   const [sortK, setSortK] = useState("points");
   const [dir, setDir] = useState(-1);
 
   type Row = { uid: string; nick: string; first: string; last: string; user: User; points: number; games: number; wins: number; top3: number; ft: number; best: number; kos: number; rebs: number };
   const rows: Row[] = useMemo(() => {
+    if (!users || Object.keys(users).length === 0) return [];
     if (mode === "season") {
       const rating = computeSeasonRating(users, tournaments, sid);
       return rating.map((r) => {
@@ -469,7 +473,10 @@ export function Seasons({ ro }: { ro: boolean }) {
   const planned = list.filter((t) => t.status === "planned").length;
   const rating = computeSeasonRating(users, tournaments, sid);
   const leader = rating[0];
-  const pool = Object.values(users).filter((u) => !u.isArchived && !u.isBlocked && !season.finalTable.manualPlayers.includes(u.uid));
+  const pool = useMemo(() => 
+    Object.values(users || {}).filter((u) => u && !u.isArchived && !u.isBlocked && !season.finalTable.manualPlayers.includes(u.uid)),
+    [users, season]
+  );
 
   const doForm = async () => {
     setLoading(true);
@@ -824,7 +831,7 @@ export function SettingsPage() {
               <p className="lbl flex items-center gap-2"><ShieldCheck className="size-4 text-(--acc)" /> Роли и операторы</p>
               <p className="mt-1 text-[12.5px] text-mut">Оператор ведёт пульт и турниры, остальные разделы — только просмотр.</p>
               <div className="mt-3 max-h-[260px] space-y-1.5 overflow-y-auto pr-1">
-                {Object.values(users).filter((u) => !u.isArchived).sort((a, b) => a.nickname.localeCompare(b.nickname)).map((u) => (
+                {Object.values(users || {}).filter((u) => u && !u.isArchived).sort((a, b) => a.nickname.localeCompare(b.nickname)).map((u) => (
                   <div key={u.uid} className="flex items-center gap-2.5 rounded-xl bg-white/[0.03] px-2.5 py-2">
                     <Avatar user={u} size={30} />
                     <span className="min-w-0 flex-1 truncate text-[12.5px] font-bold">{u.nickname}</span>
