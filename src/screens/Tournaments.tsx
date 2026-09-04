@@ -576,18 +576,18 @@ export function TournamentSeats({ tid, ro }: { tid: string; ro: boolean }) {
   
   if (!t) return <Empty title="Турнир не найден" />;
 
-  const regs = Object.entries(t.registeredPlayers).sort((a, b) => (a[1].playerNumber ?? 99999) - (b[1].playerNumber ?? 99999));
-  const seatedUids = new Set(Object.values(t.tables.seats));
+  const regs = Object.entries(t.registeredPlayers || {}).sort((a, b) => (a[1].playerNumber ?? 99999) - (b[1].playerNumber ?? 99999));
+  const seatedUids = new Set(Object.values(t.tables?.seats || {}));
   const unseated = regs.filter(([u]) => !seatedUids.has(u));
   const unseatedReady = unseated.filter(([, r]) => r.playerNumber != null);
   const noNumCnt = unseated.length - unseatedReady.length;
   const codes = sortedSeatCodes(t);
-  const pool = Object.values(users).filter((u) => !u.isArchived && !u.isBlocked && !t.registeredPlayers[u.uid]);
+  const pool = Object.values(users || {}).filter((u) => !u.isArchived && !u.isBlocked && !t.registeredPlayers[u.uid]);
   const found = pool.filter((u) => (u.nickname + " " + u.firstName + " " + u.lastName).toLowerCase().includes(q.toLowerCase()));
   const regOpen = lateRegOpen(t);
-  const seatedCnt = Object.values(t.registeredPlayers).filter((r) => r.seatCode).length;
+  const seatedCnt = Object.values(t.registeredPlayers || {}).filter((r) => r.seatCode).length;
   const counts = tableCounts(t);
-  const minCnt = Math.min(...Object.values(counts));
+  const minCnt = Math.min(...Object.values(counts || {}));
   
   const batchToast = (r: { seated: number; skippedNoNumber: number }) => {
     if (r.seated === 0 && r.skippedNoNumber > 0) { toast("Рассадить некого: у всех игроков без места нет номера", "err"); return; }
