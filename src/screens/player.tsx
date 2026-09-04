@@ -27,7 +27,7 @@ function placeTone(p: number) {
 }
 
 /* ============================== ГЛАВНАЯ ============================== */
-export default function PlayerHome() {
+export default function PlayerHome({ targetUid }: { targetUid?: string }) {
   const { users, tournaments, seasons } = useFirebaseData();
   const { firebaseUser } = useAuth();
   const nav = useNavigate();
@@ -35,7 +35,8 @@ export default function PlayerHome() {
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({ nickname: "", firstName: "", lastName: "", phone: "", email: "", hue: 152, avatar: "" });
   
-  const me = firebaseUser ? users[firebaseUser.uid] : null;
+  const uid = targetUid || firebaseUser?.uid;
+  const me = uid ? users[uid] : null;
   if (!me) return null;
 
   const rating = Object.values(users).filter((u) => !u.isArchived).sort((a, b) => b.stats.points - a.stats.points);
