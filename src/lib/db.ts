@@ -66,6 +66,7 @@ export interface TournamentDraft {
 export interface TemplateData {
   startingStack: number; finalTablePlayers: number; pointsForKnockout: boolean;
   knockoutPoints: number; rebuyChips: number; reentryChips: number; addonChips: number;
+  isFinal?: boolean;
   registrationDuration: number; description: string;
   structure: { levels: Level[]; breaks: Break[] };
   bonuses: Bonus[]; pointsTable: Record<string, number>;

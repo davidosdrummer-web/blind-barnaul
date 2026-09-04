@@ -192,7 +192,7 @@ export function TournamentForm({ editId, templateId }: { editId: string | null; 
   
   const editing = editId ? tournaments[editId] : null;
   const tplMode = templateId != null;
-  const srcTpl = tplMode && templateId !== "new" ? templates[templateId] : null;
+  const srcTpl = tplMode && templateId !== "new" ? templates?.[templateId] || null : null;
   
   const [d, setD] = useState<TournamentDraft>(() => {
     const seasonId = Object.values(seasons || {}).find((x) => x.isActive)?.id ?? Object.keys(seasons || {})[0] ?? "";
@@ -205,6 +205,7 @@ export function TournamentForm({ editId, templateId }: { editId: string | null; 
         pointsForKnockout: td.pointsForKnockout, knockoutPoints: td.knockoutPoints ?? 5,
         rebuyChips: td.rebuyChips ?? td.startingStack, reentryChips: td.reentryChips ?? td.startingStack, 
         addonChips: td.addonChips ?? Math.round(td.startingStack / 2),
+        isFinal: td.isFinal ?? false,
         structure: structuredClone(td.structure), bonuses: structuredClone(td.bonuses),
         pointsTable: { ...td.pointsTable }, tables: { ...td.tables },
       };
@@ -217,6 +218,7 @@ export function TournamentForm({ editId, templateId }: { editId: string | null; 
       pointsForKnockout: editing.pointsForKnockout, knockoutPoints: editing.knockoutPoints ?? 5,
       rebuyChips: editing.rebuyChips ?? editing.startingStack, reentryChips: editing.reentryChips ?? editing.startingStack, 
       addonChips: editing.addonChips ?? Math.round(editing.startingStack / 2),
+      isFinal: editing.isFinal ?? false,
       structure: structuredClone(editing.structure),
       bonuses: structuredClone(editing.bonuses), pointsTable: { ...editing.pointsTable },
       tables: { totalTables: editing.tables.totalTables, seatsPerTable: editing.tables.seatsPerTable },

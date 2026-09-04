@@ -467,14 +467,14 @@ export function PlayerRating() {
   const { firebaseUser } = useAuth();
   const [mode, setMode] = useState<"season" | "all">("season");
   
+  const seasonsList = seasons ? Object.values(seasons).sort((a, b) => Number(b.isActive) - Number(a.isActive) || b.startDate - a.startDate) : [];
+  const activeSeason = seasonsList.find((x) => x.isActive);
+  const [sid, setSid] = useState(activeSeason?.id ?? seasonsList[0]?.id ?? "");
+  
   if (loading) return null;
   
   const me = firebaseUser ? users[firebaseUser.uid] : null;
   if (!me) return null;
-  
-  const seasonsList = seasons ? Object.values(seasons).sort((a, b) => Number(b.isActive) - Number(a.isActive) || b.startDate - a.startDate) : [];
-  const activeSeason = seasonsList.find((x) => x.isActive);
-  const [sid, setSid] = useState(activeSeason?.id ?? seasonsList[0]?.id ?? "");
 
   const rows = useMemo(() => {
     if (!users || Object.keys(users).length === 0) return [];
