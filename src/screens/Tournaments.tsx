@@ -149,7 +149,7 @@ export default function TournamentsList() {
             {res.results.ranking.map((u, i) => (
               <div key={u} className={cn("flex items-center gap-3 rounded-xl px-3 py-2.5", i === 0 ? "bg-[#ffd76a]/10 ring-1 ring-[#ffd76a]/30" : "bg-white/[0.03]")}>
                 <span className={cn("num w-9 text-center font-display text-[16px] font-extrabold", i === 0 ? "text-[#ffd76a]" : i === 1 ? "text-[#c9d4e5]" : i === 2 ? "text-[#d9915b]" : "text-dim")}>{i + 1}</span>
-                <Avatar user={users[u]} size={34} />
+                <Avatar user={users?.[u]} size={34} />
                 <span className="min-w-0 flex-1 truncate text-[13.5px] font-bold">{users[u]?.nickname ?? "—"}</span>
                 <span className="num text-[14px] font-extrabold text-(--acc)">+{res.results!.pointsAwarded[u] ?? 0}</span>
               </div>
@@ -705,7 +705,7 @@ export function TournamentSeats({ tid, ro }: { tid: string; ro: boolean }) {
               <div className="mt-2 max-h-[380px] space-y-1.5 overflow-y-auto pr-1">
                 {regs.map(([u, r]) => (
                   <div key={u} className={cn("flex items-center gap-2.5 rounded-xl border border-transparent bg-white/[0.03] px-2.5 py-2 transition", selUid === u && "border-(--acc-line) bg-(--acc-soft)")}>
-                    <Avatar user={users[u]} size={34} />
+                    <Avatar user={users?.[u]} size={34} />
                     <button className="min-w-0 flex-1 text-left" onClick={() => setSelUid(selUid === u ? null : u)}>
                       <span className="block truncate text-[13px] font-bold">{users[u]?.nickname}</span>
                       <span className="text-[11px] font-semibold text-dim">{r.seatCode ? `место ${r.seatCode}` : r.playerNumber == null ? "без места · нет номера" : "без места"} · {fmtDateShort(r.registeredAt)}</span>
@@ -851,7 +851,7 @@ export function TournamentSeats({ tid, ro }: { tid: string; ro: boolean }) {
                               occ ? "bg-(--acc-soft) text-(--acc)" : "bg-white/[0.05] text-dim")}>{code}</span>
                             {occ ? (
                               <div className="flex h-full flex-col items-center justify-center gap-1.5 p-2 pt-6">
-                                <Avatar user={users[occ]} size={34} />
+                                <Avatar user={users?.[occ]} size={34} />
                                 <span className="max-w-full truncate text-[11.5px] font-bold leading-none">{users[occ]?.nickname ?? "?"}</span>
                                 <span className="num text-[10px] font-extrabold text-dim">
                                   {occReg?.playerNumber != null ? `#${occReg.playerNumber}` : "без номера"}
@@ -898,7 +898,7 @@ export function TournamentSeats({ tid, ro }: { tid: string; ro: boolean }) {
                 }
               }}
                 className="flex w-full items-center gap-3 rounded-xl border border-line bg-white/[0.03] px-3 py-2.5 text-left transition hover:border-(--acc-line) hover:bg-(--acc-soft)">
-                <Avatar user={users[u]} size={34} />
+                <Avatar user={users?.[u]} size={34} />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[13.5px] font-bold">{users[u]?.nickname}</span>
                   <span className="text-[11.5px] font-semibold text-dim">№ {r.playerNumber} · {users[u]?.firstName} {users[u]?.lastName}</span>
@@ -927,7 +927,7 @@ export function TournamentSeats({ tid, ro }: { tid: string; ro: boolean }) {
           return (
             <div className="space-y-4">
               <div className="flex items-center gap-3.5 rounded-2xl border border-line bg-white/[0.03] p-3.5">
-                <Avatar user={users[u]} size={46} ring />
+                <Avatar user={users?.[u]} size={46} ring />
                 <div>
                   <p className="font-display text-[15px] font-extrabold">{users[u]?.nickname}</p>
                   <p className="text-[12.5px] font-semibold text-mut">{users[u]?.firstName} {users[u]?.lastName} · участник № {r.playerNumber ?? "—"}</p>

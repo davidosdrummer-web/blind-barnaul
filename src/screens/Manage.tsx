@@ -518,7 +518,7 @@ export function Seasons({ ro }: { ro: boolean }) {
               {rating.slice(0, 10).map((r, i) => (
                 <div key={r.uid} className="flex items-center gap-3 rounded-xl px-2.5 py-2 hover:bg-white/[0.04]">
                   <span className={cn("num w-7 text-center font-display text-[14px] font-extrabold", i === 0 ? "text-[#ffd76a]" : i < 3 ? "text-(--acc)" : "text-dim")}>{i + 1}</span>
-                  <Avatar user={users[r.uid]} size={32} />
+                  <Avatar user={users?.[r.uid]} size={32} />
                   <span className="min-w-0 flex-1 truncate text-[13px] font-bold">{users[r.uid]?.nickname}{i < (season.finalTable?.places ?? 9) && <Badge tone="acc" className="ml-2">финал</Badge>}</span>
                   <span className="num text-[13.5px] font-extrabold text-(--acc)">{fmtNum(r.points)}</span>
                 </div>
