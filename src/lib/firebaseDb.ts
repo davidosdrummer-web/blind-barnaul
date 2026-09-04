@@ -11,9 +11,9 @@ import {
 } from "./db";
 
 // ========== ПОДПИСКИ (реактивность) ==========
-export function subscribeClub(callback: (club: Club) => void) {
+export function subscribeClub(callback: (club: Club | null) => void) {
   const clubRef = ref(db, "club");
-  return onValue(clubRef, (snap) => { const val = snap.val(); if (val) callback(val); });
+  return onValue(clubRef, (snap) => { const val = snap.val(); callback(val || null); });
 }
 export function subscribeUsers(callback: (users: Record<string, User>) => void) {
   const usersRef = ref(db, "users");
