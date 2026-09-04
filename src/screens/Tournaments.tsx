@@ -582,7 +582,7 @@ export function TournamentSeats({ tid, ro }: { tid: string; ro: boolean }) {
   const unseatedReady = unseated.filter(([, r]) => r.playerNumber != null);
   const noNumCnt = unseated.length - unseatedReady.length;
   const codes = sortedSeatCodes(t);
-  const pool = Object.values(users || {}).filter((u) => !u.isArchived && !u.isBlocked && !t.registeredPlayers[u.uid]);
+  const pool = Object.values(users || {}).filter((u) => !u.isArchived && !u.isBlocked && !(t.registeredPlayers || {})[u.uid]);
   const found = pool.filter((u) => (u.nickname + " " + u.firstName + " " + u.lastName).toLowerCase().includes(q.toLowerCase()));
   const regOpen = lateRegOpen(t);
   const seatedCnt = Object.values(t.registeredPlayers || {}).filter((r) => r.seatCode).length;

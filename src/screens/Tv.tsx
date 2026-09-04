@@ -213,7 +213,7 @@ export function TvFinal() {
           </div>
           {SEAT_POS.map((pos, i) => {
             const entry = shown[i];
-            const u = entry ? users[entry[0]] : null;
+            const u = entry ? users?.[entry[0]] : null;
             const reg = entry ? entry[1] : null;
             return (
               <div key={i} className="absolute -translate-x-1/2 -translate-y-1/2 text-center transition-all duration-700" style={{ left: `${pos.x}%`, top: `${pos.y}%` }}>
@@ -248,7 +248,7 @@ export function TvResults() {
   const { t } = useTournament("results");
   if (!t || !t.results) return <TvFrame><p className="grid h-full place-items-center font-display text-2xl text-mut">Итоги появятся после завершения турнира</p></TvFrame>;
   
-  const winner = users[t.results.winner];
+  const winner = users?.[t.results.winner];
   const top = t.results.ranking.slice(0, 10);
 
   return (
@@ -268,7 +268,7 @@ export function TvResults() {
           <p className="lbl !mb-3">Топ-10 · очки</p>
           <div className="space-y-1.5">
             {top.map((uidv, i) => {
-              const u = users[uidv];
+              const u = users?.[uidv];
               return (
                 <div key={uidv} className={cn("anim-slide flex items-center gap-3.5 rounded-xl px-3.5 py-2.5", i === 0 ? "bg-[#ffd76a]/10 ring-1 ring-[#ffd76a]/35" : i < 3 ? "bg-(--acc-soft)" : "bg-white/[0.03]")}
                   style={{ animationDelay: `${i * 110}ms` }}>
@@ -337,7 +337,7 @@ export function TvRanking() {
         </div>
         <div key={String(mode)} className="panel anim-in flex-1 overflow-hidden px-4 py-3">
           {rows.map((r, i) => {
-            const u = users[r.uid];
+            const u = users?.[r.uid];
             return (
               <div key={r.uid} className={cn("flex items-center gap-4 border-b border-line/60 px-3 py-[0.85vh] last:border-0", i < 3 && "bg-(--acc-soft) rounded-xl border-0")}>
                 <span className={cn("num w-12 text-center font-display text-[clamp(17px,1.8vw,26px)] font-extrabold", i === 0 ? "text-[#ffd76a]" : i === 1 ? "text-[#c9d4e5]" : i === 2 ? "text-[#d9915b]" : "text-dim")}>{r.place}</span>
