@@ -463,17 +463,20 @@ export function PlayerAchievements() {
 
 /* ============================== РЕЙТИНГ ============================== */
 export function PlayerRating() {
-  const { users, tournaments, seasons } = useFirebaseData();
+  const { users, tournaments, seasons, loading } = useFirebaseData();
   const { firebaseUser } = useAuth();
   const [mode, setMode] = useState<"season" | "all">("season");
+  
+  if (loading) return null;
   
   const me = firebaseUser ? users[firebaseUser.uid] : null;
   if (!me) return null;
   
-  const seasonsList = Object.values(seasons).sort((a, b) => Number(b.isActive) - Number(a.isActive) || b.startDate - a.startDate);
+  const seasonsList = Object.values(seasons || {}).sort((a, b) => Number(b.isActive) - Number(a.isActive) || b.startDate - a.startDate);
   const [sid, setSid] = useState(seasonsList.find((x) => x.isActive)?.id ?? seasonsList[0]?.id ?? "");
 
   const rows = useMemo(() => {
+    if (!users || Object.keys(users).length === 0) return [];
     if (mode === "all") {
       return Object.values(users).filter((u) => !u.isArchived).sort((a, b) => b.stats.points - a.stats.points)
         .map((u, i) => ({ uid: u.uid, place: i + 1, points: u.stats.points, games: u.stats.totalTournaments, wins: u.stats.wins }));
