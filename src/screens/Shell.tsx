@@ -38,14 +38,15 @@ const clubNav = [
 
 function useSectionRenderer() {
   const { section = "", p1, p2 } = useParams();
-  const { users, tournaments, seasons, templates, achievements, screens } = useFirebaseData();
+  const { users, tournaments, seasons, templates, achievements, screens, loading } = useFirebaseData();
   const { firebaseUser } = useAuth();
   const me = firebaseUser ? users[firebaseUser.uid] : null;
-  const isAdmin = me?.role === "admin";
-  const isOp = me?.role !== "player";
-  const view = (me?.role === "player" || !isOp) ? "player" : "club";
-
-  if (!me) return null;
+  
+  if (loading || !me) return null;
+  
+  const isAdmin = me.role === "admin";
+  const isOp = me.role !== "player";
+  const view = me.role === "player" ? "player" : "club";
 
   if (view === "player") {
     switch (section) {
@@ -79,13 +80,13 @@ function useSectionRenderer() {
 }
 
 export default function Shell() {
-  const { users, tournaments, club } = useFirebaseData();
+  const { users, tournaments, club, loading } = useFirebaseData();
   const { firebaseUser } = useAuth();
   const nav = useNavigate();
   const { section = "" } = useParams();
   const me = firebaseUser ? users[firebaseUser.uid] : null;
   
-  if (!me) return null;
+  if (loading || !me) return null;
   
   const isOp = me.role !== "player";
   const isAdmin = me.role === "admin";
