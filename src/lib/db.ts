@@ -152,7 +152,7 @@ export function plural(n: number, one: string, few: string, many: string) {
 export function capacity(t: Tournament) { return t.tables.totalTables * t.tables.seatsPerTable; }
 
 export function chipsInPlay(t: Tournament) {
-  return Object.values(t.registeredPlayers).reduce((a, r) => a + (r.isEliminated ? 0 : r.chips), 0);
+  return Object.values(t.registeredPlayers || {}).reduce((a, r) => a + (r.isEliminated ? 0 : r.chips), 0);
 }
 
 export function bankChips(t: Tournament) { 

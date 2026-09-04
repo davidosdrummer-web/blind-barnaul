@@ -68,8 +68,8 @@ export default function TournamentsList() {
       ) : (
         <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {list.map((t, i) => {
-            const cnt = Object.keys(t.registeredPlayers).length;
-            const seated = Object.values(t.registeredPlayers).filter((r) => r.seatCode).length;
+            const cnt = Object.keys(t.registeredPlayers || {}).length;
+            const seated = Object.values(t.registeredPlayers || {}).filter((r) => r.seatCode).length;
             return (
               <Reveal key={t.id} delay={i * 60} className="h-full">
                 <div className="panel flex h-full flex-col p-5 transition-transform duration-300 hover:-translate-y-1">
@@ -88,7 +88,7 @@ export default function TournamentsList() {
                   {t.status === "active" && (
                     <p className="mt-3 flex items-center gap-2 rounded-xl bg-(--acc-soft) px-3 py-2 text-[12px] font-extrabold text-(--acc)">
                       <span className="relative size-1.5 rounded-full bg-(--acc) live-dot" />
-                      Уровень {t.pult.currentLevel}/{t.structure.levels.length} · в игре {Object.values(t.registeredPlayers).filter((r) => !r.isEliminated).length}
+                      Уровень {t.pult.currentLevel}/{t.structure.levels.length} · в игре {Object.values(t.registeredPlayers || {}).filter((r) => !r.isEliminated).length}
                     </p>
                   )}
                   <div className="mt-auto flex flex-wrap gap-2 pt-4">

@@ -280,7 +280,7 @@ export function PlayerTournaments() {
         {open.map((t, i) => {
           const reg = t.registeredPlayers[firebaseUser!.uid];
           const cap = capacity(t);
-          const cnt = Object.keys(t.registeredPlayers).length;
+          const cnt = Object.keys(t.registeredPlayers || {}).length;
           const regOpen = lateRegOpen(t);
           return (
             <Reveal key={t.id} delay={i * 60} className="h-full">

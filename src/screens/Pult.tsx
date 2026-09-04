@@ -62,11 +62,11 @@ export default function Pult({ preselect }: { preselect?: string }) {
   const running = p.timerStarted && !p.timerPaused && t.status === "active";
   const regOpen = lateRegOpen(t);
   const regLeft = t.registrationDuration * 60 - p.elapsedSeconds;
-  const playersIn = Object.values(t.registeredPlayers).filter((r) => !r.isEliminated).length;
-  const playersTotal = Object.keys(t.registeredPlayers).length;
+  const playersIn = Object.values(t.registeredPlayers || {}).filter((r) => !r.isEliminated).length;
+  const playersTotal = Object.keys(t.registeredPlayers || {}).length;
   const bank = bankChips(t);
   const withdrawn = t.withdrawn ?? 0;
-  const activePlayers = Object.entries(t.registeredPlayers).filter(([, r]) => !r.isEliminated);
+  const activePlayers = Object.entries(t.registeredPlayers || {}).filter(([, r]) => !r.isEliminated);
   const eliminated = Object.entries(p.eliminated).sort((a, b) => b[1].eliminatedAt - a[1].eliminatedAt);
   const totalLevels = t.structure.levels.length;
   const low = running && p.timeRemaining <= 15;

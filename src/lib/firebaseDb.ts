@@ -235,7 +235,7 @@ export async function deleteTournament(tid: string) {
 export async function launchTournament(tid: string): Promise<string | null> {
   const t = await getTournament(tid);
   if (!t) return "Турнир не найден";
-  const seated = Object.values(t.registeredPlayers).filter(r => r.seatCode).length;
+  const seated = Object.values(t.registeredPlayers || {}).filter(r => r.seatCode).length;
   if (seated < 2) return "Для старта необходимо рассадить минимум 2 участников";
   
   const updateData: any = {
@@ -274,7 +274,7 @@ export async function registerSelf(tid: string, targetUid: string): Promise<stri
   const t = await getTournament(tid);
   if (!t) return "Турнир не найден";
   if (t.isFinal && !t.registeredPlayers[targetUid]) return "Турнир по приглашениям: регистрация закрыта";
-  if (Object.keys(t.registeredPlayers).length >= capacity(t)) return "Все места заняты";
+  if (Object.keys(t.registeredPlayers || {}).length >= capacity(t)) return "Все места заняты";
   if (!lateRegOpen(t)) return "Регистрация завершена";
   
   const reg = {
@@ -310,7 +310,7 @@ export async function setPlayerNumber(tid: string, targetUid: string, num: numbe
   if (!t) return "Турнир не найден";
   if (num != null) {
     const n = Math.max(1, Math.floor(num));
-    const dup = Object.entries(t.registeredPlayers).find(([u, r]) => u !== targetUid && r.playerNumber === n);
+    const dup = Object.entries(t.registeredPlayers || {}).find(([u, r]) => u !== targetUid && r.playerNumber === n);
     if (dup) return `Номер ${n} уже занят — у игрока ${(await getUser(dup[0]))?.nickname ?? "другого участника"}.`;
     num = n;
   }
@@ -346,8 +346,8 @@ export async function setSeat(tid: string, targetUid: string, code: string | nul
 export async function seatRandom(tid: string): Promise<{ seated: number; skippedNoNumber: number }> {
   const t = await getTournament(tid);
   if (!t) return { seated: 0, skippedNoNumber: 0 };
-  const eligible = Object.entries(t.registeredPlayers).filter(([, r]) => !r.seatCode && r.playerNumber != null);
-  const skipped = Object.values(t.registeredPlayers).filter(r => !r.seatCode && r.playerNumber == null).length;
+  const eligible = Object.entries(t.registeredPlayers || {}).filter(([, r]) => !r.seatCode && r.playerNumber != null);
+  const skipped = Object.values(t.registeredPlayers || {}).filter(r => !r.seatCode && r.playerNumber == null).length;
   if (!eligible.length) return { seated: 0, skippedNoNumber: skipped };
   
   const counts = tableCounts(t);
@@ -376,10 +376,10 @@ export async function seatByRating(tid: string): Promise<{ seated: number; skipp
   const usersSnap = await get(ref(db, "users"));
   const users = usersSnap.val() || {};
   
-  const eligible = Object.entries(t.registeredPlayers)
+  const eligible = Object.entries(t.registeredPlayers || {})
     .filter(([, r]) => !r.seatCode && r.playerNumber != null)
     .sort((a, b) => (users[b[0]]?.stats?.points ?? 0) - (users[a[0]]?.stats?.points ?? 0));
-  const skipped = Object.values(t.registeredPlayers).filter(r => !r.seatCode && r.playerNumber == null).length;
+  const skipped = Object.values(t.registeredPlayers || {}).filter(r => !r.seatCode && r.playerNumber == null).length;
   if (!eligible.length) return { seated: 0, skippedNoNumber: skipped };
   
   const counts = tableCounts(t);
@@ -604,7 +604,7 @@ export async function finishTournament(tid: string) {
   await runTransaction(tournRef, async (current) => {
     if (!current) return;
     const t = current as Tournament;
-    const active = Object.entries(t.registeredPlayers).filter(([, r]) => !r.isEliminated).sort((a, b) => b[1].chips - a[1].chips);
+    const active = Object.entries(t.registeredPlayers || {}).filter(([, r]) => !r.isEliminated).sort((a, b) => b[1].chips - a[1].chips);
     const elim = Object.entries(t.pult.eliminated).sort((a, b) => b[1].eliminatedAt - a[1].eliminatedAt);
     const ranking = [...active.map(([u]) => u), ...elim.map(([u]) => u)];
     const part = t.pointsTable["participation"] ?? 0;

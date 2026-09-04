@@ -85,7 +85,7 @@ export function TvMain() {
   const info = levelInfo(t);
   const next = nextLevelOf(t);
   const running = t.pult.timerStarted && !t.pult.timerPaused;
-  const left = Object.values(t.registeredPlayers).filter((r) => !r.isEliminated).length;
+  const left = Object.values(t.registeredPlayers || {}).filter((r) => !r.isEliminated).length;
   const afterBreak = t.structure.breaks.find((b) => b.afterLevel === t.pult.currentLevel) ?? null;
   const dispLv = t.pult.currentBreak ? (next ?? info.lv) : info.lv;
   const dur = (t.pult.currentBreak ? (afterBreak?.duration ?? 10) : info.lv.duration) * 60;
@@ -152,7 +152,7 @@ export function TvMain() {
             <div className="grid flex-1 grid-cols-2 grid-rows-2 gap-3.5">
               {([
                 { icon: <Coins className="size-5.5" />, l: "Фишек в игре", v: fmtNum(chipsInPlay(t)), suit: "spade" as const },
-                { icon: <Users className="size-5.5" />, l: "В игре", v: `${left} / ${Object.keys(t.registeredPlayers).length}`, suit: "heart" as const },
+                { icon: <Users className="size-5.5" />, l: "В игре", v: `${left} / ${Object.keys(t.registeredPlayers || {}).length}`, suit: "heart" as const },
                 { icon: <Timer className="size-5.5" />, l: "Средний стек", v: fmtNum(left ? Math.round(chipsInPlay(t) / left) : 0), suit: "diamond" as const },
                 { icon: <Skull className="size-5.5" />, l: "Нокаутов", v: String(t.pult.knockouts), suit: "club" as const },
               ]).map((x, i) => (
@@ -188,7 +188,7 @@ export function TvFinal() {
   const { t } = useTournament("final");
   if (!t) return <TvFrame><p className="grid h-full place-items-center font-display text-2xl text-mut">Нет турниров</p></TvFrame>;
   
-  const regs = Object.entries(t.registeredPlayers).filter(([, r]) => !r.isEliminated).sort((a, b) => b[1].chips - a[1].chips);
+  const regs = Object.entries(t.registeredPlayers || {}).filter(([, r]) => !r.isEliminated).sort((a, b) => b[1].chips - a[1].chips);
   const totalLeft = regs.length;
   const isFinal = totalLeft <= t.finalTablePlayers;
   const shown = regs.slice(0, 9);
