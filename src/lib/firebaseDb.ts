@@ -205,7 +205,7 @@ export async function saveTournament(id: string | null, draft: TournamentDraft):
     rebuyChips: draft.rebuyChips,
     reentryChips: draft.reentryChips,
     addonChips: draft.addonChips,
-    isFinal: prev?.isFinal ?? draft.isFinal ?? false,
+    isFinal: prev?.isFinal ?? (draft.isFinal || false),
     withdrawn: prev?.withdrawn ?? 0,
     createdAt: prev?.createdAt ?? Date.now(),
     structure: draft.structure,

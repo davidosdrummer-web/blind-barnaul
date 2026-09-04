@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import { ReactNode, useState } from "react";
 import { NavLink, useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { signOut } from "firebase/auth";
@@ -90,7 +90,7 @@ export default function Shell() {
   
   const isOp = me.role !== "player";
   const isAdmin = me.role === "admin";
-  const view = me.role === "player" ? "player" : "club";
+  const [view, setView] = useState<"club" | "player">(isAdmin ? "club" : "player");
   const navItems = (view === "player" ? playerNav : clubNav.filter((n) => !n.adminOnly || isAdmin));
   const unread = Object.values(me.notifications || {}).filter((n) => !n.read).length;
   const activeT = Object.values(tournaments).find((t) => t.status === "active");
@@ -107,6 +107,7 @@ export default function Shell() {
   };
 
   const switchView = (v: "club" | "player") => {
+    setView(v);
     nav(`/app/${v === "player" ? "home" : "pult"}`);
   };
 

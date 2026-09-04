@@ -476,7 +476,7 @@ export function Seasons({ ro }: { ro: boolean }) {
   const leader = rating[0];
   const pool = useMemo(() => 
     Object.values(users || {}).filter((u) => u && !u.isArchived && !u.isBlocked && !(season.finalTable?.manualPlayers || []).includes(u.uid)),
-    [users, season]
+    [users, season?.finalTable?.manualPlayers]
   );
 
   const doForm = async () => {
