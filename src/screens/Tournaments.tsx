@@ -588,6 +588,7 @@ export function TournamentSeats({ tid, ro }: { tid: string; ro: boolean }) {
   const seatedCnt = Object.values(t.registeredPlayers || {}).filter((r) => r.seatCode).length;
   const counts = tableCounts(t);
   const minCnt = Math.min(...Object.values(counts || {}));
+  const seats = t.tables?.seats || {};
   
   const batchToast = (r: { seated: number; skippedNoNumber: number }) => {
     if (r.seated === 0 && r.skippedNoNumber > 0) { toast("Рассадить некого: у всех игроков без места нет номера", "err"); return; }
@@ -788,7 +789,7 @@ export function TournamentSeats({ tid, ro }: { tid: string; ro: boolean }) {
             {Array.from({ length: t.tables.totalTables }, (_, ti) => {
               const tb = ti + 1;
               const tCodes = codes.filter((c) => c.startsWith(`C${tb}-`));
-              const occCnt = tCodes.filter((c) => t.tables.seats[c]).length;
+              const occCnt = tCodes.filter((c) => seats[c]).length;
               const isMin = counts[`C${tb}`] === minCnt;
               return (
                 <div key={tb} className={cn("panel overflow-hidden transition-shadow duration-300", isMin && "ring-1 ring-(--acc-line)/50")}>
@@ -811,7 +812,7 @@ export function TournamentSeats({ tid, ro }: { tid: string; ro: boolean }) {
                   <div className="p-3.5 sm:p-4">
                     <div className="grid grid-cols-3 gap-2 lg:grid-cols-5">
                       {tCodes.map((code) => {
-                        const occ = t.tables.seats[code];
+                        const occ = seats[code];
                         const occReg = occ ? t.registeredPlayers?.[occ] : null;
                         const offBalance = !occ && !isMin;
                         return (
@@ -921,7 +922,7 @@ export function TournamentSeats({ tid, ro }: { tid: string; ro: boolean }) {
 
       <Modal open={!!occSeat} onClose={() => setOccSeat(null)} title={`Место ${occSeat ?? ""}`} subtitle="Занято участником" w="max-w-sm">
         {(() => {
-          const u = occSeat ? t.tables.seats[occSeat] : null;
+          const u = occSeat ? seats[occSeat] : null;
           const r = u ? t.registeredPlayers?.[u] : null;
           if (!u || !r) return null;
           return (
