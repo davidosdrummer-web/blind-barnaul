@@ -354,7 +354,7 @@ export function TournamentForm({ editId, templateId }: { editId: string | null; 
           <div className="grid gap-4 sm:grid-cols-2 anim-in">
             <Field label="Название турнира"><input className="inp" value={d.name} onChange={(e) => set({ name: e.target.value })} placeholder="Кубок осени" /></Field>
             <Select label="Сезон" value={d.seasonId} onChange={(v) => set({ seasonId: v })}
-              options={Object.values(seasons).map((x) => ({ v: x.id, l: x.name + (x.isActive ? " · активен" : "") }))} />
+              options={Object.values(seasons || {}).map((x) => ({ v: x.id, l: x.name + (x.isActive ? " · активен" : "") }))} />
             <Field label="Дата старта"><input type="date" className="inp" value={toISO(d.startDate)} onChange={(e) => e.target.value && set({ startDate: fromISO(e.target.value) })} /></Field>
             <Field label="Время старта"><input type="time" className="inp" value={d.startTime} onChange={(e) => set({ startTime: e.target.value })} /></Field>
             <Field label="Стартовый стек" hint="Фишек у каждого игрока на старте"><input type="number" className="inp" value={d.startingStack} onChange={(e) => set({ startingStack: +e.target.value || 0 })} /></Field>
