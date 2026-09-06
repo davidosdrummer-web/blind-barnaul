@@ -33,7 +33,7 @@ export default function Login() {
       const usersRef = ref(db, "users");
       const unsub = onValue(usersRef, (snap) => {
         const users = snap.val() || {};
-        const found = Object.values(users).some((u: any) => u.email?.toLowerCase() === lg.email.trim().toLowerCase());
+        const found = Object.values(users || {}).some((u: any) => u.email?.toLowerCase() === lg.email.trim().toLowerCase());
         setUserExistsInDb(found);
       });
       return () => unsub();
