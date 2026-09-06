@@ -244,7 +244,7 @@ export function computeSeasonRating(users: Record<string, User>, tournaments: Re
   
   Object.values(tournaments || {}).forEach((t) => {
     if (!t || t.seasonId !== seasonId || t.status !== "completed" || !t.results?.ranking) return;
-    t.results.ranking.forEach((u, i) => {
+    (t.results.ranking || []).forEach((u, i) => {
       const r = get(u); const place = i + 1;
       r.points += t.results!.pointsAwarded?.[u] ?? 0; r.games++;
       if (place === 1) r.wins++;

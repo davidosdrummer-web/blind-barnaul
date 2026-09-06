@@ -3,6 +3,7 @@ import { HashRouter, Routes, Route, Navigate, useLocation } from "react-router-d
 import { applyTheme } from "./lib/db";
 import { useFirebaseData } from "./lib/useFirebaseData";
 import { useAuth } from "./lib/useAuth";
+import { tickTimers } from "./lib/firebaseDb";
 import Login from "./screens/Login";
 import Shell from "./screens/Shell";
 import { TvMain, TvFinal, TvResults, TvRanking } from "./screens/Tv";
@@ -24,6 +25,14 @@ function ScrollTop() {
 export default function App() {
   const { club, loading: dataLoading } = useFirebaseData();
   useEffect(() => { if (club) applyTheme(club); }, [club]);
+  
+  // Запускаем таймер турниров
+  useEffect(() => {
+    const interval = setInterval(() => {
+      tickTimers().catch(console.error);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <HashRouter>

@@ -469,8 +469,9 @@ export function Seasons({ ro }: { ro: boolean }) {
   const [tplId, setTplId] = useState(templatesList.length > 0 ? (templatesList[0]?.id ?? "") : "");
   const [manualUid, setManualUid] = useState("");
   
+  // Вычисляем рейтинг сезона только если данные загружены
   const rating = useMemo(() => {
-    if (!users || !tournaments) return [];
+    if (!sid || !users || !tournaments) return [];
     return computeSeasonRating(users, tournaments, sid);
   }, [users, tournaments, sid]);
   
