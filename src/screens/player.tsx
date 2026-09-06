@@ -484,6 +484,7 @@ export function PlayerRating({ targetUid }: { targetUid?: string }) {
       return Object.values(users || {}).filter((u) => !u.isArchived).sort((a, b) => b.stats.points - a.stats.points)
         .map((u, i) => ({ uid: u.uid, place: i + 1, points: u.stats.points, games: u.stats.totalTournaments, wins: u.stats.wins }));
     }
+    if (!sid) return [];
     const rating = computeSeasonRating(users, tournaments, sid);
     return rating.map((r, i) => ({ uid: r.uid, place: i + 1, points: r.points, games: r.games, wins: r.wins }));
   }, [mode, sid, users, tournaments]);

@@ -242,17 +242,19 @@ export function computeSeasonRating(users: Record<string, User> | undefined, tou
   const map: Record<string, { uid: string; points: number; games: number; wins: number; top3: number; ft: number; best: number; kos: number; rebs: number }> = {};
   const get = (u: string) => (map[u] ??= { uid: u, points: 0, games: 0, wins: 0, top3: 0, ft: 0, best: 0, kos: 0, rebs: 0 });
   
-  if (!users || !tournaments) return [];
+  if (!users || !tournaments || !seasonId) return [];
   
   Object.values(tournaments).forEach((t) => {
-    if (!t || t.seasonId !== seasonId || t.status !== "completed" || !t.results?.ranking) return;
-    (t.results.ranking || []).forEach((u, i) => {
+    if (!t || t.seasonId !== seasonId || t.status !== "completed") return;
+    const ranking = t.results?.ranking;
+    if (!ranking || !Array.isArray(ranking)) return;
+    ranking.forEach((u, i) => {
       const r = get(u); const place = i + 1;
-      r.points += t.results!.pointsAwarded?.[u] ?? 0; r.games++;
+      r.points += t.results?.pointsAwarded?.[u] ?? 0; r.games++;
       if (place === 1) r.wins++;
       if (place <= 3) r.top3++;
       if (place <= (t.finalTablePlayers || 0)) r.ft++;
-      r.best = Math.max(r.best, t.results!.pointsAwarded?.[u] ?? 0);
+      r.best = Math.max(r.best, t.results?.pointsAwarded?.[u] ?? 0);
       const reg = t.registeredPlayers?.[u];
       if (reg) { r.kos += reg.knockouts || 0; r.rebs += (reg.rebuy || 0) + (reg.addon || 0) + (reg.reentry || 0); }
     });
