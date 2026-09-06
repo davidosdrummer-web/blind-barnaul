@@ -321,9 +321,9 @@ export async function setPlayerNumber(tid: string, targetUid: string, num: numbe
 export async function setSeat(tid: string, targetUid: string, code: string | null): Promise<string | null> {
   const t = await getTournament(tid);
   if (!t) return "Турнир не найден";
-  const reg = t.registeredPlayers[targetUid];
+  const reg = t.registeredPlayers?.[targetUid];
   if (!reg) return "Игрок не зарегистрирован в турнире";
-  if (code && t.tables.seats[code] && t.tables.seats[code] !== targetUid) return "Место уже занято";
+  if (code && t.tables?.seats?.[code] && t.tables.seats?.[code] !== targetUid) return "Место уже занято";
   if (code) {
     if (reg.playerNumber == null) return "Игрок без номера не может быть посажен за стол — сначала присвойте номер участника";
     const from = reg.seatCode?.split("-")[0];
@@ -352,7 +352,7 @@ export async function seatRandom(tid: string): Promise<{ seated: number; skipped
   
   const counts = tableCounts(t);
   const empties: Record<string, string[]> = {};
-  sortedSeatCodes(t).forEach((c) => { if (!t.tables.seats[c]) (empties[c.split("-")[0]] ??= []).push(c); });
+  sortedSeatCodes(t).forEach((c) => { if (!t.tables?.seats?.[c]) (empties[c.split("-")[0]] ??= []).push(c); });
   for (let i = eligible.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [eligible[i], eligible[j]] = [eligible[j], eligible[i]]; }
   
   let seated = 0;
@@ -384,11 +384,11 @@ export async function seatByRating(tid: string): Promise<{ seated: number; skipp
   
   const counts = tableCounts(t);
   const empties: Record<string, string[]> = {};
-  sortedSeatCodes(t).forEach((c) => { if (!t.tables.seats[c]) (empties[c.split("-")[0]] ??= []).push(c); });
+  sortedSeatCodes(t).forEach((c) => { if (!t.tables?.seats?.[c]) (empties[c.split("-")[0]] ??= []).push(c); });
   const avg: Record<string, { sum: number; n: number }> = {};
   Object.keys(counts).forEach(tb => (avg[tb] = { sum: 0, n: 0 }));
   sortedSeatCodes(t).forEach(c => {
-    const u = t.tables.seats[c];
+    const u = t.tables?.seats?.[c];
     if (!u) return;
     const tb = c.split("-")[0];
     avg[tb].sum += users[u]?.stats?.points ?? 0;
