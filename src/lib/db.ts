@@ -238,11 +238,13 @@ export function metricValue(u: User, c: CondType): number {
 }
 
 // ========== ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ РЕЙТИНГА ==========
-export function computeSeasonRating(users: Record<string, User>, tournaments: Record<string, Tournament>, seasonId: string) {
+export function computeSeasonRating(users: Record<string, User> | undefined, tournaments: Record<string, Tournament> | undefined, seasonId: string) {
   const map: Record<string, { uid: string; points: number; games: number; wins: number; top3: number; ft: number; best: number; kos: number; rebs: number }> = {};
   const get = (u: string) => (map[u] ??= { uid: u, points: 0, games: 0, wins: 0, top3: 0, ft: 0, best: 0, kos: 0, rebs: 0 });
   
-  Object.values(tournaments || {}).forEach((t) => {
+  if (!users || !tournaments) return [];
+  
+  Object.values(tournaments).forEach((t) => {
     if (!t || t.seasonId !== seasonId || t.status !== "completed" || !t.results?.ranking) return;
     (t.results.ranking || []).forEach((u, i) => {
       const r = get(u); const place = i + 1;
