@@ -387,7 +387,7 @@ export function Seasons({ ro }: { ro: boolean }) {
                 </div>
                 <h3 className="mt-3 font-display text-[16px] font-extrabold leading-snug">{x.name}</h3>
                 <p className="mt-1 text-[12.5px] font-semibold text-mut">{fmtDate(x.startDate)} — {fmtDate(x.endDate)}</p>
-                <p className="mt-3 text-[12.5px] font-semibold text-dim">{cnt} {plural(cnt, "турнир", "турнира", "турниров")} · финал: топ-{x.finalTable.places}{x.finalTable.finalTournamentId ? " · сформирован" : ""}</p>
+                <p className="mt-3 text-[12.5px] font-semibold text-dim">{cnt} {plural(cnt, "турнир", "турнира", "турниров")} · финал: топ-{x.finalTable?.places ?? 9}{x.finalTable?.finalTournamentId ? " · сформирован" : ""}</p>
                 <div className="mt-auto flex flex-wrap gap-2 pt-4">
                   <Btn size="sm" variant="soft" onClick={() => nav(`/app/seasons/${x.id}`)}>Страница сезона <ChevronRight className="size-4" /></Btn>
                   {!ro && (
