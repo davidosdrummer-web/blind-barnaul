@@ -469,6 +469,11 @@ export function Seasons({ ro }: { ro: boolean }) {
   const [tplId, setTplId] = useState(templatesList.length > 0 ? (templatesList[0]?.id ?? "") : "");
   const [manualUid, setManualUid] = useState("");
   
+  const rating = useMemo(() => {
+    if (!users || !tournaments) return [];
+    return computeSeasonRating(users, tournaments, sid);
+  }, [users, tournaments, sid]);
+  
   if (!season) return <Empty title="Сезон не найден" />;
 
   const tIds = season.tournaments ? Object.keys(season.tournaments) : [];
@@ -476,7 +481,6 @@ export function Seasons({ ro }: { ro: boolean }) {
   const played = list.filter((t) => t.status === "completed").length;
   const live = list.filter((t) => t.status === "active").length;
   const planned = list.filter((t) => t.status === "planned").length;
-  const rating = useMemo(() => computeSeasonRating(users || {}, tournaments || {}, sid), [users, tournaments, sid]);
   const leader = rating[0];
   const pool = useMemo(() => 
     Object.values(users || {}).filter((u) => u && !u.isArchived && !u.isBlocked && !(season.finalTable?.manualPlayers || []).includes(u.uid)),
