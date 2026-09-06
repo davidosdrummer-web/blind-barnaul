@@ -763,7 +763,7 @@ export function TournamentSeats({ tid, ro }: { tid: string; ro: boolean }) {
                   }
                 }}>
                 {unseated.map(([u, r]) => (
-                  <PlayerChip key={u} uid={u} nick={users[u]?.nickname ?? "?"} num={r.playerNumber} seat={null} user={users[u]}
+                  <PlayerChip key={u} uid={u} nick={users[u]?.nickname ?? "?"} num={r.playerNumber} seat={null} user={users?.[u]}
                     warn={r.playerNumber == null}
                     sel={selUid === u} onSelect={() => setSelUid(selUid === u ? null : u)} onDrag={setDragUid} ro={ro} />
                 ))}
