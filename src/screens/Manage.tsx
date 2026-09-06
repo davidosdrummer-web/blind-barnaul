@@ -476,7 +476,7 @@ export function Seasons({ ro }: { ro: boolean }) {
   const played = list.filter((t) => t.status === "completed").length;
   const live = list.filter((t) => t.status === "active").length;
   const planned = list.filter((t) => t.status === "planned").length;
-  const rating = computeSeasonRating(users || {}, tournaments, sid);
+  const rating = computeSeasonRating(users || {}, tournaments || {}, sid);
   const leader = rating[0];
   const pool = useMemo(() => 
     Object.values(users || {}).filter((u) => u && !u.isArchived && !u.isBlocked && !(season.finalTable?.manualPlayers || []).includes(u.uid)),
