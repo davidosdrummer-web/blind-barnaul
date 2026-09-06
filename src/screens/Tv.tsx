@@ -67,10 +67,10 @@ function useTournament(screenKey?: "main" | "final" | "results") {
   const { tournaments, screens } = useFirebaseData();
   const { tid } = useParams();
   const cfgId = screenKey ? screens[screenKey]?.tournamentId : undefined;
-  const all = Object.values(tournaments);
+  const all = Object.values(tournaments || {});
   
-  const t = tournaments[tid ?? ""]
-    ?? (cfgId ? tournaments[cfgId] : undefined)
+  const t = tournaments?.[tid ?? ""]
+    ?? (cfgId ? tournaments?.[cfgId] : undefined)
     ?? all.find((x) => x.status === "active")
     ?? all.find((x) => x.status === "completed" && x.results)
     ?? all[0];

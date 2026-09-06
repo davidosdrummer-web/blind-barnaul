@@ -190,7 +190,7 @@ export function TournamentForm({ editId, templateId }: { editId: string | null; 
   const nav = useNavigate();
   const [loading, setLoading] = useState(false);
   
-  const editing = editId ? tournaments[editId] : null;
+  const editing = editId ? tournaments?.[editId] : null;
   const tplMode = templateId != null;
   const srcTpl = tplMode && templateId !== "new" ? templates?.[templateId] || null : null;
   
@@ -565,7 +565,7 @@ export function TournamentSeats({ tid, ro }: { tid: string; ro: boolean }) {
   const { tournaments, users } = useFirebaseData();
   const { firebaseUser } = useAuth();
   const nav = useNavigate();
-  const t = tournaments[tid];
+  const t = tournaments?.[tid];
   const [q, setQ] = useState("");
   const [dragUid, setDragUid] = useState<string | null>(null);
   const [selUid, setSelUid] = useState<string | null>(null);

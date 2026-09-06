@@ -472,7 +472,7 @@ export function Seasons({ ro }: { ro: boolean }) {
   if (!season) return <Empty title="Сезон не найден" />;
 
   const tIds = season.tournaments ? Object.keys(season.tournaments) : [];
-  const list = tIds.map((id) => tournaments[id]).filter(Boolean);
+  const list = tIds.map((id) => tournaments?.[id]).filter(Boolean);
   const played = list.filter((t) => t.status === "completed").length;
   const live = list.filter((t) => t.status === "active").length;
   const planned = list.filter((t) => t.status === "planned").length;
@@ -603,9 +603,9 @@ export function Seasons({ ro }: { ro: boolean }) {
                 )}
                 <Select label="Шаблон финального турнира" value={tplId} onChange={setTplId}
                   options={Object.values(templates).map((t) => ({ v: t.id, l: t.name }))} />
-                {season.finalTable?.finalTournamentId && tournaments[season.finalTable.finalTournamentId] ? (
+                {season.finalTable?.finalTournamentId && tournaments?.[season.finalTable.finalTournamentId] ? (
                   <Btn variant="soft" className="w-full" onClick={() => nav(`/app/tournaments/${season.finalTable.finalTournamentId}/seats`)}>
-                    Финал сформирован: «{tournaments[season.finalTable.finalTournamentId].name}» <ChevronRight className="size-4" />
+                    Финал сформирован: «{tournaments?.[season.finalTable.finalTournamentId].name}» <ChevronRight className="size-4" />
                   </Btn>
                 ) : (
                   <Btn className="w-full" disabled={ro || !tplId || loading} onClick={doForm}><Sparkles className="size-4.5" /> Сформировать финальный турнир</Btn>
@@ -630,7 +630,7 @@ export function ScreensAdmin({ ro }: { ro: boolean }) {
     { key: "results", title: "Итоги турнира", desc: "Победитель и топ-10 с очками", url: (id: string) => `#/screen/results/${id}`, type: "results" },
     { key: "ranking", title: "Рейтинг клуба", desc: "Топ-20 игроков, автообновление", url: () => "#/screen/ranking", type: "ranking" },
   ];
-  const ts = Object.values(tournaments);
+  const ts = Object.values(tournaments || {});
   
   return (
     <div>
@@ -639,7 +639,7 @@ export function ScreensAdmin({ ro }: { ro: boolean }) {
         {defs.map((d, i) => {
           const cfg = screens[d.key];
           const tid = cfg?.tournamentId ?? ts.find((t) => t.status === "active")?.id ?? ts[0]?.id ?? "";
-          const t = tournaments[tid];
+          const t = tournaments?.[tid];
           return (
             <Reveal key={d.key} delay={i * 70} className="h-full">
               <div className="panel flex h-full flex-col p-5">

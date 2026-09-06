@@ -39,10 +39,10 @@ export default function Pult({ preselect }: { preselect?: string }) {
   const [loading, setLoading] = useState(false);
 
   const candidates = useMemo(
-    () => Object.values(tournaments).filter((t) => t.status !== "completed").sort((a, b) => Number(b.status === "active") - Number(a.status === "active")),
+    () => Object.values(tournaments || {}).filter((t) => t.status !== "completed").sort((a, b) => Number(b.status === "active") - Number(a.status === "active")),
     [tournaments]
   );
-  const t: Tournament | undefined = tournaments[tid ?? ""] ?? candidates.find((x) => x.status === "active") ?? candidates[0];
+  const t: Tournament | undefined = tournaments?.[tid ?? ""] ?? candidates.find((x) => x.status === "active") ?? candidates[0];
 
   if (!t) {
     return (
