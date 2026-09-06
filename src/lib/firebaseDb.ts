@@ -605,7 +605,7 @@ export async function finishTournament(tid: string) {
     if (!current) return;
     const t = current as Tournament;
     const active = Object.entries(t.registeredPlayers || {}).filter(([, r]) => !r.isEliminated).sort((a, b) => b[1].chips - a[1].chips);
-    const elim = Object.entries(t.pult.eliminated).sort((a, b) => b[1].eliminatedAt - a[1].eliminatedAt);
+    const elim = Object.entries(t.pult?.eliminated || {}).sort((a, b) => b[1].eliminatedAt - a[1].eliminatedAt);
     const ranking = [...active.map(([u]) => u), ...elim.map(([u]) => u)];
     const part = t.pointsTable["participation"] ?? 0;
     const koPts = t.pointsForKnockout ? (t.knockoutPoints > 0 ? t.knockoutPoints : KO_POINTS) : 0;

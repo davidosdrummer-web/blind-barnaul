@@ -742,7 +742,7 @@ export function SettingsPage() {
               <p className="lbl flex items-center gap-2"><Sparkles className="size-4 text-(--acc)" /> Активный цвет</p>
               <p className="mt-1 text-[12.5px] text-mut">Применяется сразу: кнопки, акценты, ТВ-экраны</p>
               <div className="mt-3.5 flex flex-wrap gap-2.5">
-                {Object.entries(ACCENTS).map(([k, a]) => (
+                {Object.entries(ACCENTS ?? {}).map(([k, a]) => (
                   <button key={k} onClick={async () => { 
                     try {
                       await updateClub({ activeColor: k }); 
@@ -883,7 +883,7 @@ export function SettingsPage() {
             </div>
             <Field label="Описание"><input className="inp" value={achEdit.description} onChange={(e) => setAchEdit({ ...achEdit, description: e.target.value })} /></Field>
             <Select label="Условие" value={achEdit.conditionType} onChange={(v) => setAchEdit({ ...achEdit, conditionType: v as CondType })}
-              options={Object.entries(COND_LABEL).map(([k, l]) => ({ v: k, l }))} />
+              options={Object.entries(COND_LABEL ?? {}).map(([k, l]) => ({ v: k, l }))} />
             <Field label="Иконка">
               <div className="flex flex-wrap gap-2 pt-1">
                 {ACH_ICONS.map((ic) => (

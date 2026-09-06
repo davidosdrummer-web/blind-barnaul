@@ -320,7 +320,7 @@ export function TournamentForm({ editId, templateId }: { editId: string | null; 
     }
   };
 
-  const pts = Object.entries(d.pointsTable).filter(([k]) => k !== "participation");
+  const pts = Object.entries(d?.pointsTable || {}).filter(([k]) => k !== "participation");
 
   return (
     <div>

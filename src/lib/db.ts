@@ -209,9 +209,9 @@ export function tableCounts(t: Tournament): Record<string, number> {
 export function balanceErrorForSeat(t: Tournament, code: string): string | null {
   const counts = tableCounts(t);
   const to = code.split("-")[0];
-  const min = Math.min(...Object.values(counts));
+  const min = Math.min(...Object.values(counts || {}));
   if ((counts[to] ?? 0) > min) {
-    const emptiest = Object.entries(counts)
+    const emptiest = Object.entries(counts || {})
       .filter(([, c]) => c === min)
       .map(([tb]) => `стол ${tb.replace("C", "")}`)
       .join(" / ");
