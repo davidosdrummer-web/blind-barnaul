@@ -381,7 +381,7 @@ export default function Pult({ preselect }: { preselect?: string }) {
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {eliminated.map(([uidv, e]) => {
                 const u = users?.[uidv];
-                const reg = t.registeredPlayers[uidv];
+                const reg = t.registeredPlayers?.[uidv];
                 const returned = reg && !reg.isEliminated;
                 return (
                   <div key={uidv} className={cn("panel-deep p-4", returned && "opacity-90")}>
@@ -454,7 +454,7 @@ export default function Pult({ preselect }: { preselect?: string }) {
             placeholder="— выберите игрока —"
             options={activePlayers.map(([uidv]) => ({ 
               v: uidv, 
-              l: `${users?.[uidv]?.nickname} · ${fmtNum(t.registeredPlayers[uidv].chips)} фишек` 
+              l: `${users?.[uidv]?.nickname} · ${fmtNum(t.registeredPlayers?.[uidv]?.chips ?? 0)} фишек` 
             }))} 
           />
           <Select 

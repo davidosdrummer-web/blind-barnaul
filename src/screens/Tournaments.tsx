@@ -812,7 +812,7 @@ export function TournamentSeats({ tid, ro }: { tid: string; ro: boolean }) {
                     <div className="grid grid-cols-3 gap-2 lg:grid-cols-5">
                       {tCodes.map((code) => {
                         const occ = t.tables.seats[code];
-                        const occReg = occ ? t.registeredPlayers[occ] : null;
+                        const occReg = occ ? t.registeredPlayers?.[occ] : null;
                         const offBalance = !occ && !isMin;
                         return (
                           <div key={code}
@@ -922,7 +922,7 @@ export function TournamentSeats({ tid, ro }: { tid: string; ro: boolean }) {
       <Modal open={!!occSeat} onClose={() => setOccSeat(null)} title={`Место ${occSeat ?? ""}`} subtitle="Занято участником" w="max-w-sm">
         {(() => {
           const u = occSeat ? t.tables.seats[occSeat] : null;
-          const r = u ? t.registeredPlayers[u] : null;
+          const r = u ? t.registeredPlayers?.[u] : null;
           if (!u || !r) return null;
           return (
             <div className="space-y-4">

@@ -149,7 +149,7 @@ export async function removeUser(targetUid: string) {
   const tournaments = tournSnap.val() || {};
   for (const [tid, t] of Object.entries(tournaments) as [string, any][]) {
     if (t.registeredPlayers && t.registeredPlayers[targetUid]) {
-      const seat = t.registeredPlayers[targetUid].seatCode;
+      const seat = t.registeredPlayers[targetUid]?.seatCode;
       if (seat) {
         await remove(ref(db, `tournaments/${tid}/tables/seats/${seat}`));
       }
