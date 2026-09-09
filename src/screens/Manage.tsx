@@ -788,7 +788,7 @@ export function SettingsPage() {
               <p className="lbl flex items-center gap-2"><Sparkles className="size-4 text-(--acc)" /> Активный цвет</p>
               <p className="mt-1 text-[12.5px] text-mut">Применяется сразу: кнопки, акценты, ТВ-экраны</p>
               <div className="mt-3.5 flex flex-wrap gap-2.5">
-                {Object.entries(ACCENTS).map(([k, a]) => (
+                {Object.entries(ACCENTS || {}).map(([k, a]) => (
                   <button key={k} onClick={async () => { 
                     try {
                       await updateClub({ activeColor: k }); 
