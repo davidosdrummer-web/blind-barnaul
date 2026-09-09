@@ -481,13 +481,13 @@ export function PlayerRating({ targetUid }: { targetUid?: string }) {
   const rows = useMemo(() => {
     if (!users || Object.keys(users).length === 0) return [];
     if (mode === "all") {
-      return Object.values(users || {}).filter((u) => !u.isArchived).sort((a, b) => b.stats.points - a.stats.points)
+      return Object.values(users).filter((u) => !u.isArchived).sort((a, b) => b.stats.points - a.stats.points)
         .map((u, i) => ({ uid: u.uid, place: i + 1, points: u.stats.points, games: u.stats.totalTournaments, wins: u.stats.wins }));
     }
-    if (!sid) return [];
+    if (!sid || !tournaments || Object.keys(tournaments).length === 0) return [];
     const rating = computeSeasonRating(users, tournaments, sid);
     return rating.map((r, i) => ({ uid: r.uid, place: i + 1, points: r.points, games: r.games, wins: r.wins }));
-  }, [mode, sid, users, tournaments]);
+  }, [mode, sid, users ? Object.keys(users).join(',') : null, tournaments ? Object.keys(tournaments).join(',') : null]);
 
   return (
     <div>

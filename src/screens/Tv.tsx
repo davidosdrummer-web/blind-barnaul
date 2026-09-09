@@ -308,10 +308,10 @@ export function TvRanking() {
         .map((u, i) => ({ uid: u.uid, place: i + 1, points: u.stats.points, games: u.stats.totalTournaments, wins: u.stats.wins }));
     }
     const sn = seasonsList[mode]; 
-    if (!sn || !sn.id) return [];
+    if (!sn || !sn.id || !tournaments || Object.keys(tournaments).length === 0) return [];
     const rating = computeSeasonRating(users, tournaments, sn.id);
     return rating.slice(0, 20).map((r, i) => ({ uid: r.uid, place: i + 1, points: r.points, games: r.games, wins: r.wins }));
-  }, [mode, users, tournaments, seasonsList]);
+  }, [mode, users ? Object.keys(users).join(',') : null, tournaments ? Object.keys(tournaments).join(',') : null, seasonsList.length]);
   
   const title = mode === "all" ? "Рейтинг за все время" : seasonsList[mode]?.name ?? "";
 
