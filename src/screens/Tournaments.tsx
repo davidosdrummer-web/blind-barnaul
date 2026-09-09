@@ -34,7 +34,9 @@ export default function TournamentsList() {
   const isAdmin = me?.role === "admin";
 
   const groups: Record<string, Tournament[]> = { active: [], planned: [], completed: [] };
-  Object.values(tournaments || {}).forEach((t) => groups[t.status].push(t));
+  Object.values(tournaments || {}).forEach((t) => {
+    if (groups[t.status]) groups[t.status].push(t);
+  });
   (["active", "planned"] as const).forEach((k) => groups[k].sort((a, b) => a.startDate - b.startDate));
   groups.completed.sort((a, b) => (b.results?.completedAt ?? 0) - (a.results?.completedAt ?? 0));
   const list = groups[tab];
