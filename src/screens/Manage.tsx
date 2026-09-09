@@ -10,7 +10,7 @@ import {
 } from "../lib/useFirebaseData";
 import { useAuth } from "../lib/useAuth";
 import {
-  User, Role, Achievement, CondType, ACCENTS, BGS,
+  User, Role, Achievement, CondType, ACCENTS, BGS, COND_LABEL,
   fmtDate, fmtDateShort, fmtNum, plural, capacity, Season, Tournament,
   computeSeasonRating,
 } from "../lib/db";
@@ -70,10 +70,6 @@ function formatPhone(value: string): string {
 const toISO = (ts: number) => new Date(ts - new Date(ts).getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 const fromISO = (iso: string) => new Date(iso + "T12:00:00").getTime();
 const ROLE_LABEL: Record<Role, string> = { player: "Игрок", operator: "Оператор", admin: "Администратор" };
-const COND_LABEL: Record<CondType, string> = {
-  totalTournaments: "Сыграно турниров", wins: "Побед", top3: "Попаданий в топ-3", finalTables: "Финальных столов (топ-9)",
-  knockouts: "Выбито игроков", rebuyAddon: "Ребаев и адд-онов", reentry: "Ре-энтри", bestScore: "Лучший результат по очкам",
-};
 const ACH_ICONS = ["trophy", "medal", "star", "target", "bolt", "shield", "crown", "cards", "diamond"];
 
 /* ================================ УЧАСТНИКИ ================================ */

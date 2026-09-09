@@ -6,6 +6,11 @@ export type CondType =
   | "totalTournaments" | "wins" | "top3" | "finalTables"
   | "knockouts" | "rebuyAddon" | "reentry" | "bestScore";
 
+export const COND_LABEL: Record<CondType, string> = {
+  totalTournaments: "Сыграно турниров", wins: "Побед", top3: "Попаданий в топ-3", finalTables: "Финальных столов (топ-9)",
+  knockouts: "Выбито игроков", rebuyAddon: "Ребаев и адд-онов", reentry: "Ре-энтри", bestScore: "Лучший результат по очкам",
+};
+
 export interface UserStats {
   totalTournaments: number; wins: number; top3: number; finalTables: number;
   knockouts: number; rebuy: number; addon: number; reentry: number;
