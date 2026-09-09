@@ -4,7 +4,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { LogIn, UserPlus, Eye, EyeOff, ShieldCheck } from "lucide-react";
 import { 
   signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword 
+  createUserWithEmailAndPassword,
+  updatePassword
 } from "firebase/auth";
 import { auth } from "../firebase";
 import { set, ref, get, onValue } from "firebase/database";
@@ -13,6 +14,52 @@ import { Btn, Suit, toast, ChipIcon, Field } from "../lib/ui";
 import { uid, User } from "../lib/db";
 
 type Mode = "login" | "register";
+
+// Форматирование телефона: начинается с +7, автозамена 8 на +7, автодобавление +7 если начали с 9
+function formatPhone(value: string): string {
+  // Удаляем все нецифровые символы
+  let digits = value.replace(/\D/g, "");
+  
+  // Если пустая строка, возвращаем префикс
+  if (!digits) return "+7 ";
+  
+  // Обработка начала ввода
+  if (digits.startsWith("8")) {
+    digits = "7" + digits.slice(1);
+  }
+  
+  // Если начинается не с 7, добавляем 7
+  if (!digits.startsWith("7")) {
+    digits = "7" + digits;
+  }
+  
+  // Ограничиваем длину (7 + 10 цифр = 11)
+  digits = digits.slice(0, 11);
+  
+  // Форматирование: +7 XXX XXX-XX-XX
+  let formatted = "+7 ";
+  if (digits.length > 1) {
+    const part1 = digits.slice(1, 4);
+    formatted += part1;
+    if (part1.length === 3) {
+      formatted += " ";
+      const part2 = digits.slice(4, 7);
+      formatted += part2;
+      if (part2.length === 3) {
+        formatted += "-";
+        const part3 = digits.slice(7, 9);
+        formatted += part3;
+        if (part3.length === 2) {
+          formatted += "-";
+          const part4 = digits.slice(9, 11);
+          formatted += part4;
+        }
+      }
+    }
+  }
+  
+  return formatted;
+}
 
 export default function Login() {
   const navigate = useNavigate();
@@ -377,7 +424,7 @@ export default function Login() {
                         type="tel" 
                         className="inp" 
                         value={rg.phone} 
-                        onChange={(e) => setRg({ ...rg, phone: e.target.value })} 
+                        onChange={(e) => setRg({ ...rg, phone: formatPhone(e.target.value) })} 
                         placeholder="+7 900 000-00-00" 
                       />
                     </Field>

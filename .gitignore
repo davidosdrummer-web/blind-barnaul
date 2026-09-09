@@ -1,137 +1,78 @@
-```gitignore
+```
+# Build artifacts
+dist/
+build/
+
 # Dependencies
 node_modules/
 
-# Build outputs
-dist/
-build/
-target/
+# Environment
+.env
+.env.local
+*.env.*
+
+# Editor/IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*.tmp
+
+# Logs
+*.log
 
 # Python
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-*.py.class
-.Python
-env/
-venv/
-.venv/
-.ENV
-.venv.bak/
-pip-log.txt
-pip-delete-this-directory.txt
-.tox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.log
-.git/modules/
-.DS_Store
-Thumbs.db
 
-# Compiled and binary files
+# Compiled
+*.class
 *.o
 *.obj
-*.exe
-*.dll
 *.so
-*.a
-*.out
+*.dll
+*.exe
 
-# Logs
-*.log
-
-# Environment variables
-.env
-.env.local
-*.env.*
-
-# Coverage directory used by tools like istanbul
+# Coverage
 coverage/
-*.lcov
+htmlcov/
+.coverage
 
-# TypeScript cache
-*.tsbuildinfo
+# MyPy
+.mypy_cache/
 
-# Next.js
-.next/
-out/
+# PyTest
+.pytest_cache/
 
-# Nuxt.js
-.nuxt/
-dist/
+# Gradle
+.gradle/
 
-# Vue.js
-dist/
-.vuepress/dist
-.temp/
-.output/
+# Target
+target/
 
-# React Native
-node_modules/
-react-native/
-*.apk
-*.aab
-
-# Electron
-node_modules/
-dist/
-
-# Webpack
-webpack-stats.json
-
-# Jest
-coverage/
-*.lcov
-*.log
-
-# Prettier
-.prettierignore
-
-# ESLint
-eslint-cache
-
-# Babel
-.babelrc.js
-.babelrc.json
-.babelrc
-babel.config.js
-
-# Yarn
-.yarn/
-yarn-error.log
-
-# npm
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# OS generated files
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-Icon?
-```
-
-Wait, let me reconsider. The only modified file is `src/screens/Tournaments.tsx`, which is a TypeScript React component. There are no build artifacts, dependency directories, or temporary files in the change list. The current .gitignore appears to be empty.
-
-Since there are no build artifacts, dependencies, or temporary files to ignore, I should output nothing.
-
-```gitignore
-
+# Compressed
+*.zip
+*.gz
+*.tar
+*.tgz
+*.bz2
+*.xz
+*.7z
+*.rar
+*.zst
+*.lz4
+*.lzh
+*.cab
+*.arj
+*.rpm
+*.deb
+*.Z
+*.lz
+*.lzo
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.tar.zst
 ```

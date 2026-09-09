@@ -4,6 +4,10 @@ import {
   ref, set, update, remove, push, get, onValue, runTransaction,
 } from "firebase/database";
 import { 
+  createUserWithEmailAndPassword, sendPasswordResetEmail
+} from "firebase/auth";
+import { auth } from "../firebase";
+import { 
   uid, Tournament, TournamentDraft, User, Season, Achievement, Template, Club, Notification,
   fmtDate, fmtNum, plural, capacity, chipsInPlay, lateRegOpen,
   sortedSeatCodes, tableCounts, balanceErrorForSeat,
@@ -87,9 +91,34 @@ export async function adminSaveUser(targetUid: string | null, data: {
   const dup = Object.values(users || {}).find((u: any) => u.nickname.toLowerCase() === data.nickname.toLowerCase() && u.uid !== targetUid);
   if (dup) return "Никнейм уже занят";
   
-  if (targetUid && users?.[targetUid]) {
-    const u = users[targetUid];
-    await update(ref(db, `users/${targetUid}`), {
+  // Проверяем, существует ли пользователь с таким email в Authentication
+  let userAuthId = targetUid;
+  if (!targetUid) {
+    // Новый пользователь - создаем учетную запись с временным паролем
+    const tempPassword = Math.random().toString(36).slice(-8) + "A1!";
+    try {
+      const cred = await createUserWithEmailAndPassword(auth, data.email, tempPassword);
+      userAuthId = cred.user.uid;
+      // Отправляем письмо со сбросом пароля
+      await sendPasswordResetEmail(auth, data.email);
+    } catch (err: any) {
+      if (err.code === "auth/email-already-in-use") {
+        // Email уже существует в Auth, ищем пользователя в БД
+        const existingUser = Object.values(users || {}).find((u: any) => u.email?.toLowerCase() === data.email.toLowerCase());
+        if (existingUser) {
+          userAuthId = (existingUser as any).uid;
+        } else {
+          return "Email уже используется. Пользователь должен войти через сброс пароля.";
+        }
+      } else {
+        return `Ошибка создания аккаунта: ${err.message}`;
+      }
+    }
+  }
+  
+  if (userAuthId && users?.[userAuthId]) {
+    const u = users[userAuthId];
+    await update(ref(db, `users/${userAuthId}`), {
       nickname: data.nickname,
       firstName: data.firstName,
       lastName: data.lastName,
@@ -100,7 +129,7 @@ export async function adminSaveUser(targetUid: string | null, data: {
       stats: { ...u.stats, points: (u.stats.points || 0) + (data.startPoints > 0 ? data.startPoints : 0) }
     });
   } else {
-    const id = uid();
+    const id = userAuthId || uid();
     const newUser: User = {
       uid: id,
       nickname: data.nickname,
@@ -124,7 +153,9 @@ export async function adminSaveUser(targetUid: string | null, data: {
       notifications: {},
     };
     await set(ref(db, `users/${id}`), newUser);
-    await notifyUser(id, "Добро пожаловать в клуб!", `Вы зарегистрированы в клубе. Стартовые очки: ${data.startPoints}.`, "account");
+    if (!targetUid) {
+      await notifyUser(id, "Добро пожаловать в клуб!", `Вы зарегистрированы в клубе. Стартовые очки: ${data.startPoints}. На ваш email отправлено письмо для установки пароля.`, "account");
+    }
   }
   return null;
 }
