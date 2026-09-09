@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Pause, Play, Coffee, SkipBack, SkipForward, Minus, Plus, Skull, Gift, Flag,
@@ -12,7 +12,7 @@ import {
 } from "../lib/db";
 import {
   togglePause, stepLevel, addMinute, startBreak, eliminate, returnPlayer, giveBonus,
-  finishTournament, withdrawChips,
+  finishTournament, withdrawChips, tickTimers,
 } from "../lib/firebaseDb";
 import { Avatar, Badge, Btn, Empty, Modal, Reveal, Select, cn, toast } from "../lib/ui";
 
@@ -37,6 +37,21 @@ export default function Pult({ preselect }: { preselect?: string }) {
   const [lcUid, setLcUid] = useState<string | null>(null);
   const [lcChips, setLcChips] = useState("");
   const [loading, setLoading] = useState(false);
+  const [now, setNow] = useState(Date.now());
+
+  // Синхронизация таймера: обновляем локальное время каждую секунду
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Вызываем tickTimers для синхронизации с сервером при загрузке и периодически
+  useEffect(() => {
+    const sync = async () => { await tickTimers(); };
+    sync();
+    const interval = setInterval(sync, 1000);
+    return () => clearInterval(interval);
+  }, [t?.id]);
 
   const candidates = useMemo(
     () => Object.values(tournaments).filter((t) => t.status !== "completed").sort((a, b) => Number(b.status === "active") - Number(a.status === "active")),

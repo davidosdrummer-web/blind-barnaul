@@ -207,7 +207,7 @@ export function TournamentForm({ editId, templateId }: { editId: string | null; 
         addonChips: td.addonChips ?? Math.round(td.startingStack / 2),
         isFinal: td.isFinal ?? false,
         structure: structuredClone(td.structure), bonuses: structuredClone(td.bonuses),
-        pointsTable: { ...td.pointsTable }, tables: { ...td.tables },
+        pointsTable: { ...td.pointsTable }, tables: { totalTables: td.tables.totalTables, seatsPerTable: td.tables.seatsPerTable },
       };
     }
     if (!editing) return defaultDraft(seasons);
