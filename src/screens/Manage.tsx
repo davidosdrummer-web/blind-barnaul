@@ -925,7 +925,7 @@ export function SettingsPage() {
             </div>
             <Field label="Описание"><input className="inp" value={achEdit.description} onChange={(e) => setAchEdit({ ...achEdit, description: e.target.value })} /></Field>
             <Select label="Условие" value={achEdit.conditionType} onChange={(v) => setAchEdit({ ...achEdit, conditionType: v as CondType })}
-              options={Object.entries(COND_LABEL).map(([k, l]) => ({ v: k, l }))} />
+              options={Object.entries(COND_LABEL || {}).map(([k, l]) => ({ v: k, l }))} />
             <Field label="Иконка">
               <div className="flex flex-wrap gap-2 pt-1">
                 {ACH_ICONS.map((ic) => (
