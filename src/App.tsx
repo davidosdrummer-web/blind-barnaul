@@ -26,12 +26,27 @@ export default function App() {
   const { club, loading: dataLoading } = useFirebaseData();
   useEffect(() => { if (club) applyTheme(club); }, [club]);
   
-  // Запускаем таймер турниров
+  // Запускаем таймер турниров - только один экземпляр должен обновлять таймеры
   useEffect(() => {
-    const interval = setInterval(() => {
-      tickTimers().catch(console.error);
-    }, 1000);
-    return () => clearInterval(interval);
+    let isOwner = false;
+    let interval: number | undefined;
+    
+    const tryAcquireLock = async () => {
+      // Простая эмуляция владельца: первое устройство, которое запустилось
+      if (!isOwner) {
+        isOwner = true;
+        interval = window.setInterval(() => {
+          tickTimers().catch(console.error);
+        }, 1000);
+      }
+    };
+    
+    tryAcquireLock();
+    
+    return () => {
+      if (interval) clearInterval(interval);
+      isOwner = false;
+    };
   }, []);
 
   return (

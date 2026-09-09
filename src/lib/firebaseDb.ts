@@ -420,13 +420,32 @@ export async function seatByRating(tid: string): Promise<{ seated: number; skipp
 export async function tickTimers() {
   const snap = await get(ref(db, "tournaments"));
   const tournaments = snap.val() || {};
+  const now = Date.now();
+  
   for (const [tid, t] of Object.entries(tournaments) as [string, any][]) {
     if (t.status === "active" && t.pult?.timerStarted && !t.pult?.timerPaused && t.pult?.timeRemaining > 0) {
-      const remaining = t.pult.timeRemaining - 1;
-      const elapsed = t.pult.elapsedSeconds + 1;
-      await update(ref(db, `tournaments/${tid}/pult`), { timeRemaining: remaining, elapsedSeconds: elapsed });
-      if (remaining <= 0) {
-        await advanceLevel(tid, t);
+      // Используем elapsedSeconds для вычисления ожидаемого времени
+      const expectedElapsed = t.pult.elapsedSeconds || 0;
+      const actualElapsed = Math.floor((now - (t.startDate || now)) / 1000);
+      
+      // Если рассинхрон больше 2 секунд, корректируем
+      if (Math.abs(actualElapsed - expectedElapsed) > 2) {
+        const remaining = Math.max(0, (t.structure.levels[t.pult.currentLevel - 1]?.duration * 60 || 0) - actualElapsed);
+        await update(ref(db, `tournaments/${tid}/pult`), { 
+          timeRemaining: remaining, 
+          elapsedSeconds: actualElapsed 
+        });
+        if (remaining <= 0) {
+          await advanceLevel(tid, t);
+        }
+      } else {
+        // Нормальный тик
+        const remaining = t.pult.timeRemaining - 1;
+        const elapsed = expectedElapsed + 1;
+        await update(ref(db, `tournaments/${tid}/pult`), { timeRemaining: remaining, elapsedSeconds: elapsed });
+        if (remaining <= 0) {
+          await advanceLevel(tid, t);
+        }
       }
     }
   }
