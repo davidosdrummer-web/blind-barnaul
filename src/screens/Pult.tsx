@@ -67,7 +67,7 @@ export default function Pult({ preselect }: { preselect?: string }) {
   const bank = bankChips(t);
   const withdrawn = t.withdrawn ?? 0;
   const activePlayers = Object.entries(t.registeredPlayers || {}).filter(([, r]) => !r.isEliminated);
-  const eliminated = Object.entries(p.eliminated).sort((a, b) => b[1].eliminatedAt - a[1].eliminatedAt);
+  const eliminated = Object.entries(p.eliminated || {}).sort((a, b) => b[1].eliminatedAt - a[1].eliminatedAt);
   const totalLevels = t.structure.levels.length;
   const low = running && p.timeRemaining <= 15;
 
