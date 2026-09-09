@@ -110,7 +110,7 @@ export async function adminSaveUser(targetUid: string | null, data: {
       phone: data.phone,
       role: data.role,
       hue: data.hue,
-      avatar: undefined,
+      avatar: data.avatar || '', // Исправлено: значение по умолчанию вместо undefined
       registrationDate: Date.now(),
       isBlocked: false,
       isArchived: false,
