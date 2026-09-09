@@ -42,10 +42,10 @@ export default function PlayerHome({ targetUid }: { targetUid?: string }) {
   const rating = Object.values(users || {}).filter((u) => !u.isArchived).sort((a, b) => b.stats.points - a.stats.points);
   const myPlace = rating.findIndex((u) => u.uid === me.uid) + 1;
   const activeT =
-    Object.values(tournaments).find((t) => t.status === "active" && t.registeredPlayers[me.uid]) ??
-    Object.values(tournaments).find((t) => t.status === "active" && !t.isFinal);
-  const myReg = activeT?.registeredPlayers[me.uid];
-  const planned = Object.values(tournaments).filter((t) => t.status === "planned" && t.registeredPlayers[me.uid]);
+    Object.values(tournaments || {}).find((t) => t.status === "active" && t.registeredPlayers?.[me.uid]) ??
+    Object.values(tournaments || {}).find((t) => t.status === "active" && !t.isFinal);
+  const myReg = activeT?.registeredPlayers?.[me.uid];
+  const planned = Object.values(tournaments || {}).filter((t) => t.status === "planned" && t.registeredPlayers?.[me.uid]);
   const hist = Object.entries(me.tournamentHistory || {}).sort((a, b) => b[1].date - a[1].date).slice(0, 4);
 
   const openEdit = () => {
@@ -241,9 +241,9 @@ export function PlayerTournaments() {
   const me = firebaseUser ? users?.[firebaseUser.uid] : null;
   if (!me) return null;
   
-  const open = Object.values(tournaments)
+  const open = Object.values(tournaments || {})
     .filter((t) => t.status !== "completed")
-    .filter((t) => !(t.isFinal && !t.registeredPlayers[firebaseUser!.uid]))
+    .filter((t) => !(t.isFinal && !t.registeredPlayers?.[firebaseUser!.uid]))
     .sort((a, b) => a.startDate - b.startDate);
   
   const hist = Object.entries(me.tournamentHistory || {}).sort((a, b) => b[1].date - a[1].date);
@@ -278,7 +278,7 @@ export function PlayerTournaments() {
       <SectionTitle kicker="Игровой календарь" title="Турниры" right={<Badge tone="mut">{open.length} {plural(open.length, "открыт", "открыто", "открыто")}</Badge>} />
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {open.map((t, i) => {
-          const reg = t.registeredPlayers[firebaseUser!.uid];
+          const reg = t.registeredPlayers?.[firebaseUser!.uid];
           const cap = capacity(t);
           const cnt = Object.keys(t.registeredPlayers || {}).length;
           const regOpen = lateRegOpen(t);
@@ -481,12 +481,13 @@ export function PlayerRating({ targetUid }: { targetUid?: string }) {
   const rows = useMemo(() => {
     if (!users || Object.keys(users).length === 0) return [];
     if (mode === "all") {
-      return Object.values(users || {}).filter((u) => !u.isArchived).sort((a, b) => b.stats.points - a.stats.points)
+      return Object.values(users).filter((u) => !u.isArchived).sort((a, b) => b.stats.points - a.stats.points)
         .map((u, i) => ({ uid: u.uid, place: i + 1, points: u.stats.points, games: u.stats.totalTournaments, wins: u.stats.wins }));
     }
+    if (!sid || !tournaments || Object.keys(tournaments).length === 0) return [];
     const rating = computeSeasonRating(users, tournaments, sid);
     return rating.map((r, i) => ({ uid: r.uid, place: i + 1, points: r.points, games: r.games, wins: r.wins }));
-  }, [mode, sid, users, tournaments]);
+  }, [mode, sid, users ? Object.keys(users).join(',') : null, tournaments ? Object.keys(tournaments).join(',') : null]);
 
   return (
     <div>

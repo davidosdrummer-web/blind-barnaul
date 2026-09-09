@@ -39,10 +39,10 @@ export default function Pult({ preselect }: { preselect?: string }) {
   const [loading, setLoading] = useState(false);
 
   const candidates = useMemo(
-    () => Object.values(tournaments).filter((t) => t.status !== "completed").sort((a, b) => Number(b.status === "active") - Number(a.status === "active")),
+    () => Object.values(tournaments || {}).filter((t) => t.status !== "completed").sort((a, b) => Number(b.status === "active") - Number(a.status === "active")),
     [tournaments]
   );
-  const t: Tournament | undefined = tournaments[tid ?? ""] ?? candidates.find((x) => x.status === "active") ?? candidates[0];
+  const t: Tournament | undefined = tournaments?.[tid ?? ""] ?? candidates.find((x) => x.status === "active") ?? candidates[0];
 
   if (!t) {
     return (
@@ -67,7 +67,7 @@ export default function Pult({ preselect }: { preselect?: string }) {
   const bank = bankChips(t);
   const withdrawn = t.withdrawn ?? 0;
   const activePlayers = Object.entries(t.registeredPlayers || {}).filter(([, r]) => !r.isEliminated);
-  const eliminated = Object.entries(p.eliminated).sort((a, b) => b[1].eliminatedAt - a[1].eliminatedAt);
+  const eliminated = Object.entries(p?.eliminated || {}).sort((a, b) => b[1].eliminatedAt - a[1].eliminatedAt);
   const totalLevels = t.structure.levels.length;
   const low = running && p.timeRemaining <= 15;
 
@@ -381,7 +381,7 @@ export default function Pult({ preselect }: { preselect?: string }) {
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {eliminated.map(([uidv, e]) => {
                 const u = users?.[uidv];
-                const reg = t.registeredPlayers[uidv];
+                const reg = t.registeredPlayers?.[uidv];
                 const returned = reg && !reg.isEliminated;
                 return (
                   <div key={uidv} className={cn("panel-deep p-4", returned && "opacity-90")}>
@@ -454,7 +454,7 @@ export default function Pult({ preselect }: { preselect?: string }) {
             placeholder="— выберите игрока —"
             options={activePlayers.map(([uidv]) => ({ 
               v: uidv, 
-              l: `${users?.[uidv]?.nickname} · ${fmtNum(t.registeredPlayers[uidv].chips)} фишек` 
+              l: `${users?.[uidv]?.nickname} · ${fmtNum(t.registeredPlayers?.[uidv]?.chips ?? 0)} фишек` 
             }))} 
           />
           <Select 

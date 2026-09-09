@@ -67,10 +67,10 @@ function useTournament(screenKey?: "main" | "final" | "results") {
   const { tournaments, screens } = useFirebaseData();
   const { tid } = useParams();
   const cfgId = screenKey ? screens[screenKey]?.tournamentId : undefined;
-  const all = Object.values(tournaments);
+  const all = Object.values(tournaments || {});
   
-  const t = tournaments[tid ?? ""]
-    ?? (cfgId ? tournaments[cfgId] : undefined)
+  const t = tournaments?.[tid ?? ""]
+    ?? (cfgId ? tournaments?.[cfgId] : undefined)
     ?? all.find((x) => x.status === "active")
     ?? all.find((x) => x.status === "completed" && x.results)
     ?? all[0];
@@ -307,10 +307,11 @@ export function TvRanking() {
       return Object.values(users || {}).filter((u) => !u.isArchived).sort((a, b) => b.stats.points - a.stats.points).slice(0, 20)
         .map((u, i) => ({ uid: u.uid, place: i + 1, points: u.stats.points, games: u.stats.totalTournaments, wins: u.stats.wins }));
     }
-    const sn = seasonsList[mode]; if (!sn) return [];
+    const sn = seasonsList[mode]; 
+    if (!sn || !sn.id || !tournaments || Object.keys(tournaments).length === 0) return [];
     const rating = computeSeasonRating(users, tournaments, sn.id);
     return rating.slice(0, 20).map((r, i) => ({ uid: r.uid, place: i + 1, points: r.points, games: r.games, wins: r.wins }));
-  }, [mode, users, tournaments, seasonsList]);
+  }, [mode, users ? Object.keys(users).join(',') : null, tournaments ? Object.keys(tournaments).join(',') : null, seasonsList.length]);
   
   const title = mode === "all" ? "Рейтинг за все время" : seasonsList[mode]?.name ?? "";
 

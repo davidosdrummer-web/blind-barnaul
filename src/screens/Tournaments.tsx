@@ -34,7 +34,9 @@ export default function TournamentsList() {
   const isAdmin = me?.role === "admin";
 
   const groups: Record<string, Tournament[]> = { active: [], planned: [], completed: [] };
-  Object.values(tournaments || {}).forEach((t) => groups[t.status].push(t));
+  Object.values(tournaments || {}).forEach((t) => {
+    if (groups[t.status]) groups[t.status].push(t);
+  });
   (["active", "planned"] as const).forEach((k) => groups[k].sort((a, b) => a.startDate - b.startDate));
   groups.completed.sort((a, b) => (b.results?.completedAt ?? 0) - (a.results?.completedAt ?? 0));
   const list = groups[tab];
@@ -190,7 +192,7 @@ export function TournamentForm({ editId, templateId }: { editId: string | null; 
   const nav = useNavigate();
   const [loading, setLoading] = useState(false);
   
-  const editing = editId ? tournaments[editId] : null;
+  const editing = editId ? tournaments?.[editId] : null;
   const tplMode = templateId != null;
   const srcTpl = tplMode && templateId !== "new" ? templates?.[templateId] || null : null;
   
@@ -320,7 +322,7 @@ export function TournamentForm({ editId, templateId }: { editId: string | null; 
     }
   };
 
-  const pts = Object.entries(d.pointsTable).filter(([k]) => k !== "participation");
+  const pts = Object.entries(d?.pointsTable || {}).filter(([k]) => k !== "participation");
 
   return (
     <div>
@@ -354,7 +356,7 @@ export function TournamentForm({ editId, templateId }: { editId: string | null; 
           <div className="grid gap-4 sm:grid-cols-2 anim-in">
             <Field label="Название турнира"><input className="inp" value={d.name} onChange={(e) => set({ name: e.target.value })} placeholder="Кубок осени" /></Field>
             <Select label="Сезон" value={d.seasonId} onChange={(v) => set({ seasonId: v })}
-              options={Object.values(seasons).map((x) => ({ v: x.id, l: x.name + (x.isActive ? " · активен" : "") }))} />
+              options={Object.values(seasons || {}).map((x) => ({ v: x.id, l: x.name + (x.isActive ? " · активен" : "") }))} />
             <Field label="Дата старта"><input type="date" className="inp" value={toISO(d.startDate)} onChange={(e) => e.target.value && set({ startDate: fromISO(e.target.value) })} /></Field>
             <Field label="Время старта"><input type="time" className="inp" value={d.startTime} onChange={(e) => set({ startTime: e.target.value })} /></Field>
             <Field label="Стартовый стек" hint="Фишек у каждого игрока на старте"><input type="number" className="inp" value={d.startingStack} onChange={(e) => set({ startingStack: +e.target.value || 0 })} /></Field>
@@ -565,7 +567,7 @@ export function TournamentSeats({ tid, ro }: { tid: string; ro: boolean }) {
   const { tournaments, users } = useFirebaseData();
   const { firebaseUser } = useAuth();
   const nav = useNavigate();
-  const t = tournaments[tid];
+  const t = tournaments?.[tid];
   const [q, setQ] = useState("");
   const [dragUid, setDragUid] = useState<string | null>(null);
   const [selUid, setSelUid] = useState<string | null>(null);
@@ -588,6 +590,7 @@ export function TournamentSeats({ tid, ro }: { tid: string; ro: boolean }) {
   const seatedCnt = Object.values(t.registeredPlayers || {}).filter((r) => r.seatCode).length;
   const counts = tableCounts(t);
   const minCnt = Math.min(...Object.values(counts || {}));
+  const seats = t.tables?.seats || {};
   
   const batchToast = (r: { seated: number; skippedNoNumber: number }) => {
     if (r.seated === 0 && r.skippedNoNumber > 0) { toast("Рассадить некого: у всех игроков без места нет номера", "err"); return; }
@@ -788,7 +791,7 @@ export function TournamentSeats({ tid, ro }: { tid: string; ro: boolean }) {
             {Array.from({ length: t.tables.totalTables }, (_, ti) => {
               const tb = ti + 1;
               const tCodes = codes.filter((c) => c.startsWith(`C${tb}-`));
-              const occCnt = tCodes.filter((c) => t.tables.seats[c]).length;
+              const occCnt = tCodes.filter((c) => seats[c]).length;
               const isMin = counts[`C${tb}`] === minCnt;
               return (
                 <div key={tb} className={cn("panel overflow-hidden transition-shadow duration-300", isMin && "ring-1 ring-(--acc-line)/50")}>
@@ -811,8 +814,8 @@ export function TournamentSeats({ tid, ro }: { tid: string; ro: boolean }) {
                   <div className="p-3.5 sm:p-4">
                     <div className="grid grid-cols-3 gap-2 lg:grid-cols-5">
                       {tCodes.map((code) => {
-                        const occ = t.tables.seats[code];
-                        const occReg = occ ? t.registeredPlayers[occ] : null;
+                        const occ = seats[code];
+                        const occReg = occ ? t.registeredPlayers?.[occ] : null;
                         const offBalance = !occ && !isMin;
                         return (
                           <div key={code}
@@ -921,8 +924,8 @@ export function TournamentSeats({ tid, ro }: { tid: string; ro: boolean }) {
 
       <Modal open={!!occSeat} onClose={() => setOccSeat(null)} title={`Место ${occSeat ?? ""}`} subtitle="Занято участником" w="max-w-sm">
         {(() => {
-          const u = occSeat ? t.tables.seats[occSeat] : null;
-          const r = u ? t.registeredPlayers[u] : null;
+          const u = occSeat ? seats[occSeat] : null;
+          const r = u ? t.registeredPlayers?.[u] : null;
           if (!u || !r) return null;
           return (
             <div className="space-y-4">

@@ -97,8 +97,8 @@ export default function Shell() {
   const isOp = me.role !== "player";
   const isAdmin = me.role === "admin";
   const navItems = (view === "player" ? playerNav : clubNav.filter((n) => !n.adminOnly || isAdmin));
-  const unread = Object.values(me.notifications || {}).filter((n) => !n.read).length;
-  const activeT = Object.values(tournaments).find((t) => t.status === "active");
+  const unread = Object.values(me?.notifications || {}).filter((n) => !n.read).length;
+  const activeT = Object.values(tournaments || {}).find((t) => t.status === "active");
 
   const go = (k: string) => nav(`/app/${k}`);
   

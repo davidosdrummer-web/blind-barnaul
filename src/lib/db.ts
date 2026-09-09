@@ -149,7 +149,7 @@ export function plural(n: number, one: string, few: string, many: string) {
 }
 
 // ========== ПОМОЩНИКИ ДЛЯ РАСЧЁТОВ ==========
-export function capacity(t: Tournament) { return t.tables.totalTables * t.tables.seatsPerTable; }
+export function capacity(t: Tournament) { return (t.tables?.totalTables || 0) * (t.tables?.seatsPerTable || 0); }
 
 export function chipsInPlay(t: Tournament) {
   return Object.values(t.registeredPlayers || {}).reduce((a, r) => a + (r.isEliminated ? 0 : r.chips), 0);
@@ -185,7 +185,8 @@ export function nextLevelOf(t: Tournament): Level | null {
 
 export function sortedSeatCodes(t: Tournament) {
   const out: string[] = [];
-  const { totalTables, seatsPerTable } = t.tables;
+  const { totalTables, seatsPerTable } = t.tables || {};
+  if (!totalTables || !seatsPerTable) return out;
   for (let tb = 1; tb <= totalTables; tb++) {
     for (let seat = 1; seat <= seatsPerTable; seat++) {
       out.push(`C${tb}-${seat}`);
@@ -196,9 +197,11 @@ export function sortedSeatCodes(t: Tournament) {
 
 export function tableCounts(t: Tournament): Record<string, number> {
   const counts: Record<string, number> = {};
-  for (let i = 1; i <= t.tables.totalTables; i++) counts[`C${i}`] = 0;
+  const totalTables = t.tables?.totalTables;
+  if (!totalTables) return counts;
+  for (let i = 1; i <= totalTables; i++) counts[`C${i}`] = 0;
   sortedSeatCodes(t).forEach((c) => {
-    if (t.tables.seats[c]) {
+    if (t.tables?.seats?.[c]) {
       const tb = c.split("-")[0];
       counts[tb] = (counts[tb] ?? 0) + 1;
     }
@@ -208,6 +211,7 @@ export function tableCounts(t: Tournament): Record<string, number> {
 
 export function balanceErrorForSeat(t: Tournament, code: string): string | null {
   const counts = tableCounts(t);
+  if (Object.keys(counts).length === 0) return null;
   const to = code.split("-")[0];
   const min = Math.min(...Object.values(counts));
   if ((counts[to] ?? 0) > min) {
@@ -234,21 +238,25 @@ export function metricValue(u: User, c: CondType): number {
 }
 
 // ========== ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ РЕЙТИНГА ==========
-export function computeSeasonRating(users: Record<string, User>, tournaments: Record<string, Tournament>, seasonId: string) {
+export function computeSeasonRating(users: Record<string, User> | undefined, tournaments: Record<string, Tournament> | undefined, seasonId: string) {
   const map: Record<string, { uid: string; points: number; games: number; wins: number; top3: number; ft: number; best: number; kos: number; rebs: number }> = {};
   const get = (u: string) => (map[u] ??= { uid: u, points: 0, games: 0, wins: 0, top3: 0, ft: 0, best: 0, kos: 0, rebs: 0 });
   
-  Object.values(tournaments || {}).forEach((t) => {
-    if (!t || t.seasonId !== seasonId || t.status !== "completed" || !t.results) return;
-    t.results.ranking.forEach((u, i) => {
+  if (!users || !tournaments || !seasonId) return [];
+  
+  Object.values(tournaments).forEach((t) => {
+    if (!t || t.seasonId !== seasonId || t.status !== "completed") return;
+    const ranking = t.results?.ranking;
+    if (!ranking || !Array.isArray(ranking)) return;
+    ranking.forEach((u, i) => {
       const r = get(u); const place = i + 1;
-      r.points += t.results!.pointsAwarded[u] ?? 0; r.games++;
+      r.points += t.results?.pointsAwarded?.[u] ?? 0; r.games++;
       if (place === 1) r.wins++;
       if (place <= 3) r.top3++;
-      if (place <= t.finalTablePlayers) r.ft++;
-      r.best = Math.max(r.best, t.results!.pointsAwarded[u] ?? 0);
-      const reg = t.registeredPlayers[u];
-      if (reg) { r.kos += reg.knockouts; r.rebs += reg.rebuy + reg.addon + reg.reentry; }
+      if (place <= (t.finalTablePlayers || 0)) r.ft++;
+      r.best = Math.max(r.best, t.results?.pointsAwarded?.[u] ?? 0);
+      const reg = t.registeredPlayers?.[u];
+      if (reg) { r.kos += reg.knockouts || 0; r.rebs += (reg.rebuy || 0) + (reg.addon || 0) + (reg.reentry || 0); }
     });
   });
   return Object.values(map).sort((a, b) => b.points - a.points || a.games - b.games);
