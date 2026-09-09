@@ -268,7 +268,8 @@ export function TournamentForm({ editId, templateId }: { editId: string | null; 
     startingStack: x.startingStack, finalTablePlayers: x.finalTablePlayers, pointsForKnockout: x.pointsForKnockout,
     knockoutPoints: x.knockoutPoints, rebuyChips: x.rebuyChips, reentryChips: x.reentryChips, addonChips: x.addonChips,
     registrationDuration: x.registrationDuration, description: x.description,
-    structure: x.structure, bonuses: x.bonuses, pointsTable: x.pointsTable, tables: x.tables,
+    structure: structuredClone(x.structure), bonuses: structuredClone(x.bonuses), 
+    pointsTable: structuredClone(x.pointsTable), tables: structuredClone(x.tables),
   });
   
   const applyTemplate = (data: TemplateData) => {
