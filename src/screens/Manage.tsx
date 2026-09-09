@@ -10,7 +10,7 @@ import {
 } from "../lib/useFirebaseData";
 import { useAuth } from "../lib/useAuth";
 import {
-  User, Role, Achievement, CondType, ACCENTS, BGS,
+  User, Role, Achievement, CondType, ACCENTS, BGS, COND_LABEL,
   fmtDate, fmtDateShort, fmtNum, plural, capacity, Season, Tournament,
   computeSeasonRating,
 } from "../lib/db";
@@ -21,13 +21,55 @@ import {
 } from "../lib/firebaseDb";
 import { Avatar, AchIcon, Badge, Btn, Empty, Field, Modal, Reveal, SectionTitle, Select, StatusBadge, Toggle, cn, toast } from "../lib/ui";
 
+// Форматирование телефона: начинается с +7, автозамена 8 на +7, автодобавление +7 если начали с 9
+function formatPhone(value: string): string {
+  // Удаляем все нецифровые символы
+  let digits = value.replace(/\D/g, "");
+  
+  // Если пустая строка, возвращаем префикс
+  if (!digits) return "+7 ";
+  
+  // Обработка начала ввода
+  if (digits.startsWith("8")) {
+    digits = "7" + digits.slice(1);
+  }
+  
+  // Если начинается не с 7, добавляем 7
+  if (!digits.startsWith("7")) {
+    digits = "7" + digits;
+  }
+  
+  // Ограничиваем длину (7 + 10 цифр = 11)
+  digits = digits.slice(0, 11);
+  
+  // Форматирование: +7 XXX XXX-XX-XX
+  let formatted = "+7 ";
+  if (digits.length > 1) {
+    const part1 = digits.slice(1, 4);
+    formatted += part1;
+    if (part1.length === 3) {
+      formatted += " ";
+      const part2 = digits.slice(4, 7);
+      formatted += part2;
+      if (part2.length === 3) {
+        formatted += "-";
+        const part3 = digits.slice(7, 9);
+        formatted += part3;
+        if (part3.length === 2) {
+          formatted += "-";
+          const part4 = digits.slice(9, 11);
+          formatted += part4;
+        }
+      }
+    }
+  }
+  
+  return formatted;
+}
+
 const toISO = (ts: number) => new Date(ts - new Date(ts).getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 const fromISO = (iso: string) => new Date(iso + "T12:00:00").getTime();
 const ROLE_LABEL: Record<Role, string> = { player: "Игрок", operator: "Оператор", admin: "Администратор" };
-const COND_LABEL: Record<CondType, string> = {
-  totalTournaments: "Сыграно турниров", wins: "Побед", top3: "Попаданий в топ-3", finalTables: "Финальных столов (топ-9)",
-  knockouts: "Выбито игроков", rebuyAddon: "Ребаев и адд-онов", reentry: "Ре-энтри", bestScore: "Лучший результат по очкам",
-};
 const ACH_ICONS = ["trophy", "medal", "star", "target", "bolt", "shield", "crown", "cards", "diamond"];
 
 /* ================================ УЧАСТНИКИ ================================ */
@@ -173,7 +215,7 @@ export function Members({ ro }: { ro: boolean }) {
           <Field label="Имя"><input className="inp" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} /></Field>
           <Field label="Фамилия"><input className="inp" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} /></Field>
           <Field label="E-mail"><input type="email" className="inp" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
-          <Field label="Телефон"><input type="tel" className="inp" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
+          <Field label="Телефон"><input type="tel" className="inp" value={form.phone} onChange={(e) => setForm({ ...form, phone: formatPhone(e.target.value) })} /></Field>
           {isNew && <Field label="Начислить стартовые очки"><input type="number" className="inp" value={form.startPoints} onChange={(e) => setForm({ ...form, startPoints: +e.target.value || 0 })} /></Field>}
         </div>
         <div className="mt-5 flex justify-end gap-2">
@@ -742,7 +784,7 @@ export function SettingsPage() {
               <p className="lbl flex items-center gap-2"><Sparkles className="size-4 text-(--acc)" /> Активный цвет</p>
               <p className="mt-1 text-[12.5px] text-mut">Применяется сразу: кнопки, акценты, ТВ-экраны</p>
               <div className="mt-3.5 flex flex-wrap gap-2.5">
-                {Object.entries(ACCENTS).map(([k, a]) => (
+                {Object.entries(ACCENTS || {}).map(([k, a]) => (
                   <button key={k} onClick={async () => { 
                     try {
                       await updateClub({ activeColor: k }); 
@@ -883,7 +925,7 @@ export function SettingsPage() {
             </div>
             <Field label="Описание"><input className="inp" value={achEdit.description} onChange={(e) => setAchEdit({ ...achEdit, description: e.target.value })} /></Field>
             <Select label="Условие" value={achEdit.conditionType} onChange={(v) => setAchEdit({ ...achEdit, conditionType: v as CondType })}
-              options={Object.entries(COND_LABEL).map(([k, l]) => ({ v: k, l }))} />
+              options={Object.entries(COND_LABEL || {}).map(([k, l]) => ({ v: k, l }))} />
             <Field label="Иконка">
               <div className="flex flex-wrap gap-2 pt-1">
                 {ACH_ICONS.map((ic) => (

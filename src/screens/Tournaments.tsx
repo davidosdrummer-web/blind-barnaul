@@ -207,7 +207,7 @@ export function TournamentForm({ editId, templateId }: { editId: string | null; 
         addonChips: td.addonChips ?? Math.round(td.startingStack / 2),
         isFinal: td.isFinal ?? false,
         structure: structuredClone(td.structure), bonuses: structuredClone(td.bonuses),
-        pointsTable: { ...td.pointsTable }, tables: { ...td.tables },
+        pointsTable: { ...td.pointsTable }, tables: { totalTables: td.tables.totalTables, seatsPerTable: td.tables.seatsPerTable },
       };
     }
     if (!editing) return defaultDraft(seasons);
@@ -268,7 +268,8 @@ export function TournamentForm({ editId, templateId }: { editId: string | null; 
     startingStack: x.startingStack, finalTablePlayers: x.finalTablePlayers, pointsForKnockout: x.pointsForKnockout,
     knockoutPoints: x.knockoutPoints, rebuyChips: x.rebuyChips, reentryChips: x.reentryChips, addonChips: x.addonChips,
     registrationDuration: x.registrationDuration, description: x.description,
-    structure: x.structure, bonuses: x.bonuses, pointsTable: x.pointsTable, tables: x.tables,
+    structure: structuredClone(x.structure), bonuses: structuredClone(x.bonuses), 
+    pointsTable: structuredClone(x.pointsTable), tables: structuredClone(x.tables),
   });
   
   const applyTemplate = (data: TemplateData) => {
